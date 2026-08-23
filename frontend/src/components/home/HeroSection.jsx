@@ -60,14 +60,14 @@ export default function HeroSection() {
 
                             {/* BUTTONS */}
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <Button variant="primary">
+                                <Button variant="primary" to="/shop">
                                     <div className="flex items-center gap-3">
                                         View Products
                                         <ArrowRight size={18} />
                                     </div>
                                 </Button>
 
-                                <Button variant="secondary">
+                                <Button variant="secondary" to="/login">
                                     Login
                                 </Button>
                             </div>

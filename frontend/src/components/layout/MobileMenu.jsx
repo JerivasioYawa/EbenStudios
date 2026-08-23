@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function MobileMenu({ isOpen, onClose }) {
     return (
@@ -31,9 +32,9 @@ export default function MobileMenu({ isOpen, onClose }) {
 
                 {/* Links */}
                 <div className="flex flex-col gap-6 p-6 text-lg font-medium">
-                    <a href="#" onClick={onClose}>Home</a>
-                    <a href="#" onClick={onClose}>Products</a>
-                    <a href="#" onClick={onClose}>Contact</a>
+                    <Link to="/" onClick={onClose}>Home</Link>
+                    <Link to="/shop" onClick={onClose}>Products</Link>
+                    <Link to="/contact" onClick={onClose}>Contact</Link>
                 </div>
             </div>
         </div>

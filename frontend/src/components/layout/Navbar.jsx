@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, NavLink } from "react-router-dom";
 import logo from "../../assets/logo.svg";
 
 import {
@@ -11,9 +12,15 @@ import {
 
 import SearchBar from "../ui/SearchBar";
 import MobileMenu from "./MobileMenu";
+import { useCart } from "../../hooks/useCart";
+
+function navLinkClass({ isActive }) {
+    return isActive ? "text-black" : "text-neutral-600 hover:text-black transition";
+}
 
 export default function Navbar() {
     const [open, setOpen] = useState(false);
+    const { itemCount } = useCart();
 
     return (
         <>
@@ -23,17 +30,19 @@ export default function Navbar() {
 
                         {/* LEFT */}
                         <div className="flex items-center gap-10">
-                            <img
-                                src={logo}
-                                alt="Eben Studios"
-                                className="w-14 h-14 object-contain"
-                            />
+                            <Link to="/">
+                                <img
+                                    src={logo}
+                                    alt="Eben Studios"
+                                    className="w-14 h-14 object-contain"
+                                />
+                            </Link>
 
                             {/* DESKTOP LINKS */}
                             <nav className="hidden md:flex items-center gap-8 font-medium">
-                                <a href="#">Home</a>
-                                <a href="#">Products</a>
-                                <a href="#">Contact</a>
+                                <NavLink to="/" end className={navLinkClass}>Home</NavLink>
+                                <NavLink to="/shop" className={navLinkClass}>Products</NavLink>
+                                <NavLink to="/contact" className={navLinkClass}>Contact</NavLink>
                             </nav>
                         </div>
 
@@ -47,9 +56,16 @@ export default function Navbar() {
 
                             {/* ICONS */}
                             <div className="hidden md:flex items-center gap-4 text-neutral-600">
-                                <ShoppingCart size={20} />
+                                <Link to="/cart" aria-label="Cart" className="relative">
+                                    <ShoppingCart size={20} />
+                                    {itemCount > 0 && (
+                                        <span className="absolute -top-2 -right-2 bg-black text-white text-[10px] font-semibold w-4 h-4 rounded-full flex items-center justify-center">
+                                            {itemCount}
+                                        </span>
+                                    )}
+                                </Link>
                                 <Bell size={20} />
-                                <User size={20} />
+                                <Link to="/profile" aria-label="Profile"><User size={20} /></Link>
                                 <Settings size={20} />
                             </div>
 
