@@ -53,7 +53,8 @@ export default function AdminLogin() {
                 )}
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <input
+                    <label htmlFor="account-email">Email</label>
+                <input id="account-email"
                         type="email"
                         required
                         placeholder="Email"
@@ -62,7 +63,8 @@ export default function AdminLogin() {
                         className="rounded-full px-6 py-4 bg-white/10 border border-white/20 placeholder:text-neutral-400 focus:outline-none"
                     />
 
-                    <input
+                    <label htmlFor="account-password">Password</label>
+                <input id="account-password"
                         type="password"
                         required
                         placeholder="Password"

@@ -1,0 +1,45 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> backend@1.0.0 test:all
+> npm test && npm run test:syntax
+
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> backend@1.0.0 test
+> node --test tests/*.test.js
+
+✔ HTTP registration rejects invalid credentials, duplicate emails and role escalation (1072.629097ms)
+✔ HTTP authorization and database-backed role changes are enforced (22.349829ms)
+✔ checkout uses cents, replays once and isolates customer history (42.347036ms)
+✔ invalid quantities and missing checkout keys cannot mutate stock (31.188529ms)
+✔ multi-item checkout rolls back earlier stock deductions (41.561845ms)
+✔ cancellation restores stock exactly once and final states reject backward transitions (119.761991ms)
+✔ snapshot survives product rename, archive and restore; optional fields clear (50.794305ms)
+✔ simultaneous buyers cannot oversell one remaining item (25.482931ms)
+✔ uploads reject spoofed and oversized files and clean failed saves (131.041708ms)
+✔ CORS only enables configured browser origins (4.064958ms)
+✔ legacy migrations preserve records, exact cents and foreign keys; checks reject invalid writes (14.454274ms)
+✔ decimal prices become exact integer cents (1.047552ms)
+✔ three units at 29 cents totals exactly 87 cents (0.179094ms)
+✔ invalid monetary inputs are rejected (0.421399ms)
+✔ order overflow is rejected (0.137764ms)
+✔ product validator exposes only approved database fields (1.237798ms)
+✔ phase2 quantities and registration minimum remain enforced (0.590418ms)
+✔ order API retains compatible fields and uses stored product name (0.606159ms)
+✔ registration normalizes email and rejects weak passwords and malformed accounts (1.512737ms)
+✔ order combines duplicate lines and rejects invalid quantities and blank addresses (1.325636ms)
+✔ partial product update supports clearing optional text and rejects invalid IDs (0.348684ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2512.249592
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> backend@1.0.0 test:syntax
+> node scripts/check-syntax.js
+
+20 JavaScript files passed syntax checks.

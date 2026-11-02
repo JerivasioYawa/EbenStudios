@@ -1,3 +1,4 @@
+import { useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getProducts } from "../service/productService";
 import ProductGrid from "../components/products/ProductGrid";
@@ -14,6 +15,9 @@ export default function Shop() {
             .finally(() => setLoading(false));
     }, []);
 
+    const [params] = useSearchParams();
+    const query = (params.get("q") || "").toLowerCase();
+    const filtered = products.filter(p => `${p.name} ${p.tag || ""}`.toLowerCase().includes(query));
     return (
         <section className="max-w-7xl mx-auto px-6 lg:px-10 py-16">
             <p className="uppercase tracking-[0.3em] text-sm text-neutral-500 mb-4">
@@ -40,7 +44,7 @@ export default function Shop() {
             )}
 
             {!loading && !error && products.length > 0 && (
-                <ProductGrid products={products} />
+                filtered.length ? <ProductGrid products={filtered} /> : <p>No products match your search.</p>
             )}
         </section>
     );

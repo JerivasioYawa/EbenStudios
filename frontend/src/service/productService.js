@@ -14,7 +14,7 @@ function toFormData(product) {
     const formData = new FormData();
 
     Object.entries(product).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
+        if (value !== undefined && value !== null) {
             formData.append(key, value);
         }
     });
@@ -35,3 +35,6 @@ export async function updateProduct(id, product) {
 export async function deleteProduct(id) {
     await api.delete(`/products/${id}`);
 }
+
+export async function getArchivedProducts() { const {data} = await api.get('/products/archived'); return data; }
+export async function restoreProduct(id) { const {data} = await api.patch(`/products/${id}/restore`); return data; }

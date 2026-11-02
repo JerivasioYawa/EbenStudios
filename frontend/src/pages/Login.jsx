@@ -36,13 +36,14 @@ export default function Login() {
             </h1>
 
             {error && (
-                <p className="text-center text-sm text-red-600 mb-4">
+                <p role="alert" className="text-center text-sm text-red-600 mb-4">
                     {error}
                 </p>
             )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <input
+                <label htmlFor="account-email">Email</label>
+                <input id="account-email"
                     type="email"
                     required
                     placeholder="Email"
@@ -51,7 +52,8 @@ export default function Login() {
                     className="rounded-full px-6 py-4 border border-black/10 bg-white focus:outline-none"
                 />
 
-                <input
+                <label htmlFor="account-password">Password</label>
+                <input id="account-password"
                     type="password"
                     required
                     placeholder="Password"

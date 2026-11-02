@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+uploads/
+*.log
+.idea/
+*.iml
+playwright-report/
+test-results/
+*.backup
+phase4-before.json

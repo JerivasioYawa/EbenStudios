@@ -10,8 +10,8 @@ export async function getMyOrders() {
     return data;
 }
 
-export async function createOrder(order) {
-    const { data } = await api.post("/orders", order);
+export async function createOrder(order, idempotencyKey) {
+    const { data } = await api.post("/orders", order, { headers: { "Idempotency-Key": idempotencyKey } });
     return data;
 }
 

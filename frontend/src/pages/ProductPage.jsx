@@ -1,3 +1,4 @@
+import { formatCents } from "../lib/money";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { getProduct } from "../service/productService";
@@ -7,6 +8,9 @@ import Button from "../components/ui/Button";
 
 export default function ProductPage() {
     const { id } = useParams();
+    return <ProductDetail key={id} id={id} />;
+}
+function ProductDetail({id}) {
     const { addToCart } = useCart();
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -78,7 +82,7 @@ export default function ProductPage() {
                     </h1>
 
                     <p className="text-2xl font-semibold mb-6">
-                        R {Number(product.price).toLocaleString()}
+                        {formatCents(product.priceCents)}
                     </p>
 
                     {product.description && (

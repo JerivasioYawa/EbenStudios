@@ -10,7 +10,7 @@ export default function About() {
             </h1>
 
             <p className="text-neutral-600 max-w-2xl leading-relaxed">
-                Nested in the heart of Woodstock, Eben Studios delivers modern
+                Nestled in the heart of Woodstock, Eben Studios delivers modern
                 streetwear inspired by culture, movement, and self-expression.
                 Founded in 2023, we design contemporary streetwear for
                 creators, visionaries, and individuals inspired by urban

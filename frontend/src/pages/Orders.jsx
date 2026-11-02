@@ -1,3 +1,4 @@
+import { formatCents } from "../lib/money";
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
@@ -90,15 +91,15 @@ export default function Orders() {
                             <div className="flex flex-col gap-2 mb-4">
                                 {order.items.map((item) => (
                                     <div key={item.id} className="flex items-center justify-between text-sm text-neutral-600">
-                                        <span>{item.product.name} × {item.quantity}</span>
-                                        <span>R {Number(item.price * item.quantity).toLocaleString()}</span>
+                                        <span>{item.productName} × {item.quantity}</span>
+                                        <span>{formatCents(item.unitPriceCents !== undefined ? item.unitPriceCents * item.quantity : item.priceCents * item.quantity)}</span>
                                     </div>
                                 ))}
                             </div>
 
                             <div className="flex items-center justify-between border-t border-black/5 pt-4">
                                 <span className="text-neutral-500">Total</span>
-                                <span className="font-bold">R {Number(order.total).toLocaleString()}</span>
+                                <span className="font-bold">{formatCents(order.totalCents)}</span>
                             </div>
                         </div>
                     ))}

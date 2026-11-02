@@ -1,7 +1,8 @@
+import { formatCents } from "../../lib/money";
 import { useEffect, useState } from "react";
 import { getOrders, updateOrderStatus } from "../../service/orderService";
 
-const ORDER_STATUSES = ["Pending", "Paid", "Shipped", "Delivered", "Cancelled"];
+const NEXT = {Pending:["Paid","Cancelled"],Paid:["Shipped"],Shipped:["Delivered"],Delivered:[],Cancelled:[]};
 
 const statusStyles = {
     Paid: "bg-green-100 text-green-700",
@@ -48,7 +49,7 @@ export default function Orders() {
                 <p className="text-sm text-red-600 mb-4">{error}</p>
             )}
 
-            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-x-auto">
                 <table className="w-full text-left">
                     <thead>
                         <tr className="border-b border-black/5 text-sm text-neutral-500">
@@ -81,16 +82,17 @@ export default function Orders() {
                                 <td className="px-6 py-4 font-semibold">#EB-{order.id}</td>
                                 <td className="px-6 py-4 text-neutral-600">{order.user?.name}</td>
                                 <td className="px-6 py-4 text-neutral-600">
-                                    R {Number(order.total).toLocaleString()}
+                                    {formatCents(order.totalCents)}
                                 </td>
                                 <td className="px-6 py-4">
                                     <select
+                                        aria-label={`Status for order ${order.id}`}
                                         value={order.status}
                                         disabled={updatingId === order.id}
                                         onChange={(e) => handleStatusChange(order.id, e.target.value)}
                                         className={`text-xs font-semibold pl-3 pr-2 py-1 rounded-full border-0 focus:outline-none disabled:opacity-50 ${statusStyles[order.status] || "bg-neutral-100 text-neutral-700"}`}
                                     >
-                                        {ORDER_STATUSES.map((status) => (
+                                        {[order.status, ...(NEXT[order.status] || [])].map((status) => (
                                             <option key={status} value={status}>
                                                 {status}
                                             </option>

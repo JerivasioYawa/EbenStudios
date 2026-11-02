@@ -37,13 +37,14 @@ export default function Register() {
             </h1>
 
             {error && (
-                <p className="text-center text-sm text-red-600 mb-4">
+                <p role="alert" className="text-center text-sm text-red-600 mb-4">
                     {error}
                 </p>
             )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <input
+                <label htmlFor="account-text">Full name</label>
+                <input id="account-text"
                     type="text"
                     required
                     placeholder="Full name"
@@ -52,7 +53,8 @@ export default function Register() {
                     className="rounded-full px-6 py-4 border border-black/10 bg-white focus:outline-none"
                 />
 
-                <input
+                <label htmlFor="account-email">Email</label>
+                <input id="account-email"
                     type="email"
                     required
                     placeholder="Email"
@@ -61,9 +63,10 @@ export default function Register() {
                     className="rounded-full px-6 py-4 border border-black/10 bg-white focus:outline-none"
                 />
 
-                <input
+                <label htmlFor="account-password">Password (at least 12 characters)</label>
+                <input id="account-password"
                     type="password"
-                    required
+                    required minLength={12} autoComplete="new-password"
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

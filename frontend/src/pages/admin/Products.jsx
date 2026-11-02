@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, X, Upload } from "lucide-react";
+import { Plus, Pencil, Archive, X, Upload } from "lucide-react";
 import {
     getProducts,
+    getArchivedProducts,
+    restoreProduct,
     createProduct,
     updateProduct,
     deleteProduct,
@@ -12,6 +14,7 @@ const emptyForm = { name: "", description: "", price: "", stock: "", tag: "" };
 
 export default function Products() {
     const [products, setProducts] = useState([]);
+    const [archived, setArchived] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -48,12 +51,18 @@ export default function Products() {
         setError("");
 
         try {
-            setProducts(await getProducts());
+            const [active, hidden] = await Promise.all([getProducts(), getArchivedProducts()]);
+            setProducts(active); setArchived(hidden);
         } catch (err) {
             setError(err.response?.data?.message || "Failed to load products.");
         } finally {
             setLoading(false);
         }
+    }
+
+    async function handleRestore(id) {
+        try { await restoreProduct(id); await loadProducts(); }
+        catch (err) { setError(err.response?.data?.message || "Restore failed."); }
     }
 
     function openAddForm() {
@@ -115,7 +124,7 @@ export default function Products() {
             setConfirmDeleteId(null);
             await loadProducts();
         } catch (err) {
-            setError(err.response?.data?.message || "Failed to delete product.");
+            setError(err.response?.data?.message || "Failed to archive product.");
         } finally {
             setDeletingId(null);
         }
@@ -125,6 +134,7 @@ export default function Products() {
 
     return (
         <div>
+            <section className="mb-8" aria-label="Archived products"><h2 className="font-bold">Archived products</h2>{archived.length ? archived.map(product => <p key={product.id}>{product.name} <button className="underline ml-4" onClick={() => handleRestore(product.id)}>Restore</button></p>) : <p>No archived products.</p>}</section>
             <div className="flex items-center justify-between mb-8">
                 <h1 className="text-3xl font-black uppercase leading-none">
                     Products
@@ -149,7 +159,7 @@ export default function Products() {
                             {editingId ? "Edit Product" : "New Product"}
                         </h2>
 
-                        <button type="button" onClick={closeForm} className="text-neutral-400 hover:text-black transition">
+                        <button aria-label="Close product form" type="button" onClick={closeForm} className="text-neutral-400 hover:text-black transition">
                             <X size={20} />
                         </button>
                     </div>
@@ -172,30 +182,30 @@ export default function Products() {
                                 type="file"
                                 accept="image/jpeg,image/png,image/webp,image/gif"
                                 onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                                className="hidden"
+                                className="sr-only"
                             />
                         </label>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                        <input
+                        <label className="flex flex-col gap-2">Name<input
                             type="text"
                             required
                             placeholder="Name"
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
                             className="rounded-xl px-4 py-3 border border-black/10 focus:outline-none"
-                        />
+                        /></label>
 
-                        <input
+                        <label className="flex flex-col gap-2">Tag (e.g. New, Limited)<input
                             type="text"
                             placeholder="Tag (e.g. New, Limited)"
                             value={form.tag}
                             onChange={(e) => setForm({ ...form, tag: e.target.value })}
                             className="rounded-xl px-4 py-3 border border-black/10 focus:outline-none"
-                        />
+                        /></label>
 
-                        <input
+                        <label className="flex flex-col gap-2">Price<input
                             type="number"
                             required
                             min="0"
@@ -204,9 +214,9 @@ export default function Products() {
                             value={form.price}
                             onChange={(e) => setForm({ ...form, price: e.target.value })}
                             className="rounded-xl px-4 py-3 border border-black/10 focus:outline-none"
-                        />
+                        /></label>
 
-                        <input
+                        <label className="flex flex-col gap-2">Stock<input
                             type="number"
                             required
                             min="0"
@@ -214,15 +224,15 @@ export default function Products() {
                             value={form.stock}
                             onChange={(e) => setForm({ ...form, stock: e.target.value })}
                             className="rounded-xl px-4 py-3 border border-black/10 focus:outline-none"
-                        />
+                        /></label>
 
-                        <textarea
+                        <label className="flex flex-col gap-2">Description<textarea
                             placeholder="Description"
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
                             className="rounded-xl px-4 py-3 border border-black/10 focus:outline-none sm:col-span-2"
                             rows={2}
-                        />
+                        /></label>
                     </div>
 
                     <button
@@ -239,7 +249,7 @@ export default function Products() {
                 <p className="text-sm text-red-600 mb-4">{error}</p>
             )}
 
-            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-x-auto">
                 <table className="w-full text-left">
                     <thead>
                         <tr className="border-b border-black/5 text-sm text-neutral-500">
@@ -285,13 +295,13 @@ export default function Products() {
                                 <td className="px-6 py-4">
                                     {confirmDeleteId === product.id ? (
                                         <div className="flex items-center justify-end gap-3 text-sm">
-                                            <span className="text-neutral-500">Delete?</span>
+                                            <span className="text-neutral-500">Archive?</span>
                                             <button
                                                 onClick={() => handleDelete(product.id)}
                                                 disabled={deletingId === product.id}
                                                 className="font-semibold text-red-600 hover:text-red-700 transition disabled:opacity-50"
                                             >
-                                                {deletingId === product.id ? "Deleting..." : "Confirm"}
+                                                {deletingId === product.id ? "Archiving..." : "Confirm"}
                                             </button>
                                             <button
                                                 onClick={() => setConfirmDeleteId(null)}
@@ -312,9 +322,9 @@ export default function Products() {
                                             <button
                                                 onClick={() => setConfirmDeleteId(product.id)}
                                                 className="hover:text-red-600 transition"
-                                                aria-label="Delete"
+                                                aria-label="Archive"
                                             >
-                                                <Trash2 size={16} />
+                                                <Archive size={16} />
                                             </button>
                                         </div>
                                     )}

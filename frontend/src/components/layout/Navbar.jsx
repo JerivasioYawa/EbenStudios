@@ -4,9 +4,9 @@ import logo from "../../assets/logo.svg";
 
 import {
     ShoppingCart,
-    Bell,
+
     User,
-    Settings,
+
     Menu,
 } from "lucide-react";
 
@@ -64,16 +64,13 @@ export default function Navbar() {
                                         </span>
                                     )}
                                 </Link>
-                                <Bell size={20} />
+
                                 <Link to="/profile" aria-label="Profile"><User size={20} /></Link>
-                                <Settings size={20} />
+
                             </div>
 
                             {/* HAMBURGER (mobile only) */}
-                            <Menu
-                                className="md:hidden cursor-pointer"
-                                onClick={() => setOpen(true)}
-                            />
+                            <button className="md:hidden" aria-label="Open navigation" aria-expanded={open} onClick={() => setOpen(true)}><Menu /></button>
                         </div>
                     </div>
                 </div>

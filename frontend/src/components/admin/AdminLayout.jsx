@@ -20,9 +20,9 @@ export default function AdminLayout() {
     const { user, logout } = useAuth();
 
     return (
-        <div className="min-h-screen flex bg-[#f5f5f3] text-black">
+        <div className="min-h-screen flex flex-col md:flex-row bg-[#f5f5f3] text-black">
             {/* SIDEBAR */}
-            <aside className="w-64 shrink-0 bg-black text-white flex flex-col p-6">
+            <aside className="w-full md:w-64 shrink-0 bg-black text-white flex flex-col p-6">
                 <Link to="/admin" className="text-xl font-black uppercase tracking-tight mb-10">
                     Eben Admin
                 </Link>
@@ -56,14 +56,14 @@ export default function AdminLayout() {
             </aside>
 
             {/* MAIN */}
-            <div className="flex-1 flex flex-col">
+            <div className="min-w-0 flex-1 flex flex-col">
                 <header className="h-20 flex items-center justify-end px-8 border-b border-black/10 bg-white">
                     <p className="text-sm text-neutral-500">
                         Signed in as <span className="font-semibold text-black">{user?.email}</span>
                     </p>
                 </header>
 
-                <main className="flex-1 p-8">
+                <main className="flex-1 p-4 md:p-8">
                     <Outlet />
                 </main>
             </div>

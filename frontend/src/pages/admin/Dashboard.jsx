@@ -1,3 +1,4 @@
+import { formatCents } from "../../lib/money";
 import { useEffect, useState } from "react";
 import { DollarSign, ShoppingBag, Users, Package } from "lucide-react";
 import { getProducts } from "../../service/productService";
@@ -19,11 +20,11 @@ export default function Dashboard() {
             .finally(() => setLoading(false));
     }, []);
 
-    const revenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
+    const revenue = orders.filter(order => ["Paid", "Shipped", "Delivered"].includes(order.status)).reduce((sum, order) => sum + order.totalCents, 0);
     const customerCount = new Set(orders.map((order) => order.userId)).size;
 
     const stats = [
-        { label: "Revenue", value: `R ${revenue.toLocaleString()}`, icon: DollarSign },
+        { label: "Paid order value", value: formatCents(revenue), icon: DollarSign },
         { label: "Orders", value: orders.length, icon: ShoppingBag },
         { label: "Customers", value: customerCount, icon: Users },
         { label: "Products", value: products.length, icon: Package },
@@ -31,6 +32,7 @@ export default function Dashboard() {
 
     return (
         <div>
+            <p className="mb-4">Paid order value reflects recorded statuses, not verified payment settlement.</p>
             <h1 className="text-3xl font-black uppercase leading-none mb-8">
                 Dashboard
             </h1>
@@ -50,12 +52,12 @@ export default function Dashboard() {
                             <Icon size={18} className="text-neutral-400" />
                         </div>
 
-                        <p className="text-2xl font-bold">{loading ? "..." : value}</p>
+                        <p className="text-2xl font-bold">{loading ? "..." : error ? "Unavailable" : value}</p>
                     </div>
                 ))}
             </div>
 
-            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-x-auto">
                 {loading ? (
                     <p className="p-8 text-center text-neutral-500">Loading recent orders...</p>
                 ) : orders.length === 0 ? (
@@ -79,7 +81,7 @@ export default function Dashboard() {
                                     <td className="px-6 py-4 font-semibold">#EB-{order.id}</td>
                                     <td className="px-6 py-4 text-neutral-600">{order.user?.name}</td>
                                     <td className="px-6 py-4 text-neutral-600">
-                                        R {Number(order.total).toLocaleString()}
+                                        {formatCents(order.totalCents)}
                                     </td>
                                 </tr>
                             ))}

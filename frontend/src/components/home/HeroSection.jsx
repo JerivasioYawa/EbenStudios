@@ -20,7 +20,7 @@ export default function HeroSection() {
                 </h1>
 
                 <p className="max-w-3xl mx-auto text-lg text-neutral-600 leading-relaxed">
-                    Nested in the heart of Woodstock, Eben Studios delivers
+                    Nestled in the heart of Woodstock, Eben Studios delivers
                     modern streetwear inspired by culture, movement,
                     and self-expression.
                 </p>

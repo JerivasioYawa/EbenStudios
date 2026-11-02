@@ -1,0 +1,11 @@
+const {chromium}=require('playwright');
+const fs=require('fs');
+const assert=require('node:assert/strict');
+fs.mkdirSync('test-results',{recursive:true});
+(async()=>{const browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1365,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+await page.goto('http://localhost:5173');await page.getByRole('heading',{name:'Featured Products'}).waitFor();await page.getByRole('link',{name:/Woodstock Hoodie/}).first().waitFor();await page.screenshot({path:'test-results/home.png',fullPage:true});
+await page.goto('http://localhost:5173/register');await page.getByLabel('Full name').fill('Browser Tester');await page.getByLabel('Email',{exact:true}).fill(`browser-${Date.now()}@example.test`);await page.getByLabel(/Password/).fill('Browser-test-password');await page.getByRole('button',{name:'Create Account'}).click();await page.waitForURL('http://localhost:5173/');
+await page.goto('http://localhost:5173/shop');await page.getByRole('link',{name:/Woodstock Hoodie/}).first().click();await page.getByRole('button',{name:'Add to Cart'}).click();await page.goto('http://localhost:5173/cart');await page.getByRole('button',{name:'Proceed to Checkout'}).click();await page.getByLabel('Street address').fill('1 Test Road');await page.getByLabel('City',{exact:true}).fill('Cape Town');await page.getByLabel('Postal code').fill('8000');await page.getByRole('button',{name:'Place Order',exact:true}).click();await page.waitForURL('**/orders');await page.getByText(/placed successfully/).waitFor();await page.screenshot({path:'test-results/orders.png',fullPage:true});
+await page.setViewportSize({width:390,height:844});await page.goto('http://localhost:5173/');await page.getByRole('button',{name:'Open navigation'}).click();await page.getByRole('navigation',{name:'Mobile navigation'}).getByRole('link',{name:'Cart',exact:true}).click();await page.waitForURL('**/cart');await page.screenshot({path:'test-results/mobile-cart.png',fullPage:true});
+assert.deepEqual(errors,[],'Browser emitted page errors');
+console.log(JSON.stringify({customerJourney:'PASS',mobileNavigation:'PASS',pageErrors:errors}));await browser.close();})();

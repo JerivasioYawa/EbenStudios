@@ -1,3 +1,4 @@
+import { formatCents } from "../lib/money";
 import { Link } from "react-router-dom";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "../hooks/useCart";
@@ -5,7 +6,7 @@ import { getProductImage } from "../lib/productImage";
 import Button from "../components/ui/Button";
 
 export default function Cart() {
-    const { items, updateQuantity, removeFromCart, subtotal } = useCart();
+    const { items, updateQuantity, removeFromCart, subtotal, cartIssue, refreshCart } = useCart();
 
     if (items.length === 0) {
         return (
@@ -39,6 +40,7 @@ export default function Cart() {
                 Cart
             </h1>
 
+            {cartIssue && <p role="alert" className="mb-6">{cartIssue} <button onClick={refreshCart}>Retry stock check</button></p>}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                 <div className="lg:col-span-2 flex flex-col gap-4">
                     {items.map((item) => (
@@ -54,8 +56,9 @@ export default function Cart() {
 
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold truncate">{item.name}</h3>
+                                <p>{item.unavailable ? "Unavailable" : `${item.stock} available`}</p>
                                 <p className="text-neutral-500 text-sm">
-                                    R {Number(item.price).toLocaleString()}
+                                    {formatCents(item.priceCents)}
                                 </p>
                             </div>
 
@@ -82,7 +85,7 @@ export default function Cart() {
                             </div>
 
                             <p className="w-24 text-right font-semibold">
-                                R {Number(item.price * item.quantity).toLocaleString()}
+                                {formatCents(item.unitPriceCents !== undefined ? item.unitPriceCents * item.quantity : item.priceCents * item.quantity)}
                             </p>
 
                             <button
@@ -102,15 +105,15 @@ export default function Cart() {
                     <div className="flex items-center justify-between mb-6 text-neutral-600">
                         <span>Subtotal</span>
                         <span className="font-semibold text-black">
-                            R {Number(subtotal).toLocaleString()}
+                            {formatCents(subtotal)}
                         </span>
                     </div>
 
-                    <Link to="/checkout">
+                    {!cartIssue && <Link to="/checkout">
                         <button className="w-full bg-black text-white rounded-full py-4 font-semibold hover:bg-neutral-800 transition">
                             Proceed to Checkout
                         </button>
-                    </Link>
+                    </Link>}
                 </div>
             </div>
         </section>
