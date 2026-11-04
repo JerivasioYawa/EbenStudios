@@ -1,23 +1,43 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { getProduct } from "../service/productService";
 import { useCart } from "../hooks/useCart";
+import { useAuth } from "../hooks/useAuth";
+import { returnTo } from "../lib/loginReturn";
 import { getProductImage } from "../lib/productImage";
 import Button from "../components/ui/Button";
 
 export default function ProductPage() {
     const { id } = useParams();
-    const { addToCart } = useCart();
+    const { addToCart, loading: cartLoading, pending } = useCart();
+    const { user, loading: authLoading } = useAuth();
+    const location = useLocation();
+    const navigate = useNavigate();
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [added, setAdded] = useState(false);
+    const [cartError, setCartError] = useState("");
 
-    function handleAddToCart() {
-        addToCart(product);
-        setAdded(true);
-        setTimeout(() => setAdded(false), 2000);
+    async function handleAddToCart() {
+        if (!user) {
+            navigate("/login", { state: { from: returnTo(location) } });
+            return;
+        }
+        setCartError("");
+        try {
+            await addToCart(product);
+            setAdded(true);
+        } catch (failure) {
+            setCartError(failure.response?.data?.message || failure.message || "Unable to add this item.");
+        }
     }
+
+    useEffect(() => {
+        if (!added) return;
+        const timer = setTimeout(() => setAdded(false), 2000);
+        return () => clearTimeout(timer);
+    }, [added]);
 
     useEffect(() => {
         getProduct(id)
@@ -94,16 +114,17 @@ export default function ProductPage() {
                     <div className="flex flex-col sm:flex-row gap-4">
                         <button
                             onClick={handleAddToCart}
-                            disabled={product.stock === 0}
+                            disabled={authLoading || pending || (Boolean(user) && (product.stock === 0 || cartLoading))}
                             className="bg-black text-white px-8 py-4 rounded-full font-semibold hover:bg-neutral-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {added ? "Added to Cart" : "Add to Cart"}
+                            {!user ? "Log in to add to cart." : pending ? "Adding..." : added ? "Added to Cart" : "Add to Cart"}
                         </button>
 
                         <Button variant="outline" to="/shop">
                             Back to Shop
                         </Button>
                     </div>
+                    {cartError && <p role="alert" className="mt-4 text-sm text-red-600">{cartError}</p>}
                 </div>
             </div>
         </section>

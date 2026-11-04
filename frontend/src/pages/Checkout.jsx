@@ -1,13 +1,10 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
+import { useNavigate } from "react-router-dom";
 import { useCart } from "../hooks/useCart";
-import { createOrder } from "../service/orderService";
 import Button from "../components/ui/Button";
 
 export default function Checkout() {
-    const { user, loading: authLoading } = useAuth();
-    const { items, subtotal, clearCart } = useCart();
+    const { items, subtotal, checkout, loading, pending, error: cartError } = useCart();
     const navigate = useNavigate();
 
     const [address, setAddress] = useState("");
@@ -16,13 +13,7 @@ export default function Checkout() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
 
-    if (authLoading) {
-        return null;
-    }
-
-    if (!user) {
-        return <Navigate to="/login" replace />;
-    }
+    if (loading) return <p role="status" className="p-6">Loading your cart...</p>;
 
     if (items.length === 0) {
         return (
@@ -31,6 +22,7 @@ export default function Checkout() {
                     Checkout
                 </p>
 
+                {cartError && <p role="alert" className="mb-4 text-red-600">{cartError}</p>}
                 <h1 className="text-4xl md:text-5xl font-black uppercase leading-none mb-6">
                     Your Cart Is Empty
                 </h1>
@@ -48,12 +40,7 @@ export default function Checkout() {
         setError("");
 
         try {
-            const order = await createOrder({
-                items: items.map((item) => ({ productId: item.id, quantity: item.quantity })),
-                shippingAddress: `${address}, ${city}, ${postalCode}`,
-            });
-
-            clearCart();
+            const order = await checkout(`${address}, ${city}, ${postalCode}`);
             navigate("/orders", { state: { justOrderedId: order.id } });
         } catch (err) {
             setError(err.response?.data?.message || "Something went wrong. Please try again.");
@@ -76,8 +63,8 @@ export default function Checkout() {
                 <form onSubmit={handleSubmit} className="lg:col-span-2 flex flex-col gap-4">
                     <h2 className="font-bold text-lg mb-2">Shipping Details</h2>
 
-                    {error && (
-                        <p className="text-sm text-red-600">{error}</p>
+                    {(error || cartError) && (
+                        <p role="alert" className="text-sm text-red-600">{error || cartError}</p>
                     )}
 
                     <input
@@ -111,7 +98,7 @@ export default function Checkout() {
 
                     <button
                         type="submit"
-                        disabled={submitting}
+                        disabled={submitting || pending}
                         className="bg-black text-white rounded-full py-4 font-semibold hover:bg-neutral-800 transition disabled:opacity-50 mt-2"
                     >
                         {submitting ? "Placing Order..." : `Place Order — R ${Number(subtotal).toLocaleString()}`}

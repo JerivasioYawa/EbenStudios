@@ -31,6 +31,8 @@ describe("Eben Studios API", { concurrency: false }, () => {
 
     beforeEach(async () => {
         await prisma.$transaction([
+            prisma.cartItem.deleteMany(),
+            prisma.cart.deleteMany(),
             prisma.orderItem.deleteMany(),
             prisma.order.deleteMany(),
             prisma.product.deleteMany(),
@@ -155,6 +157,8 @@ describe("Eben Studios API", { concurrency: false }, () => {
     });
 
     it("creates orders using database prices and decrements inventory", async () => {
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 2 }).expect(200);
         const response = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({
             items: [{ productId: product.id, quantity: 2, price: 1 }],
             total: 1, shippingAddress: "1 Test Street, Cape Town, 8001",
@@ -166,25 +170,30 @@ describe("Eben Studios API", { concurrency: false }, () => {
         assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 3);
         const mine = await request(app).get("/api/orders/mine").auth(customerToken, { type: "bearer" }).expect(200);
         assert.deepEqual(mine.body.map((order) => order.id), [response.body.id]);
+        assert.equal(await prisma.cartItem.count(), 0);
     });
 
-    it("requires authentication and a non-empty cart to place an order", async () => {
+    it("requires authentication and a saved non-empty cart to place an order", async (t) => {
+        t.mock.method(console, "error", () => {});
         await request(app).post("/api/orders").send({ items: [] }).expect(401);
         await request(app).get("/api/orders/mine").expect(401);
-        for (const items of [undefined, []]) {
+        for (const items of [undefined, [], [{ productId: product.id, quantity: 1 }]]) {
             await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({ items }).expect(400);
         }
     });
 
     it("rolls back stock changes when a later cart item cannot be fulfilled", async (t) => {
         t.mock.method(console, "error", () => {});
-        for (const unavailable of [{ productId: 0, quantity: 1 }, { productId: product.id, quantity: 10 }]) {
-            await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({
-                items: [{ productId: product.id, quantity: 1 }, unavailable],
-            }).expect(400);
-            assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
-            assert.equal(await prisma.order.count(), 0);
+        const second = await prisma.product.create({ data: { name: "Second Tee", price: 50, stock: 1 } });
+        for (const productId of [product.id, second.id]) {
+            await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+                .send({ productId, quantity: 1 }).expect(200);
         }
+        await prisma.product.update({ where: { id: second.id }, data: { stock: 0 } });
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({}).expect(400);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
+        assert.equal(await prisma.order.count(), 0);
+        assert.equal(await prisma.cartItem.count(), 2);
     });
 
     it("keeps other customers' orders out of the customer's order history", async () => {
@@ -206,5 +215,147 @@ describe("Eben Studios API", { concurrency: false }, () => {
             .auth(adminToken, { type: "bearer" }).send({ status: "Unknown" }).expect(400);
         await request(app).patch("/api/orders/0/status")
             .auth(adminToken, { type: "bearer" }).send({ status: "Paid" }).expect(404);
+    });
+
+    it("rejects every guest cart API action and saves nothing", async () => {
+        for (const [method, url] of [
+            ["get", "/api/cart"], ["post", "/api/cart/items"],
+            ["patch", `/api/cart/items/${product.id}`], ["delete", `/api/cart/items/${product.id}`],
+            ["delete", "/api/cart"],
+        ]) {
+            await request(app)[method](url).send({ productId: product.id, quantity: 1 }).expect(401);
+        }
+        assert.equal(await prisma.cart.count(), 0);
+        assert.equal(await prisma.cartItem.count(), 0);
+    });
+
+    it("returns an empty authenticated cart without creating records on read", async () => {
+        const response = await request(app).get("/api/cart").auth(customerToken, { type: "bearer" }).expect(200);
+        assert.deepEqual(response.body, { items: [] });
+        assert.equal(await prisma.cart.count(), 0);
+    });
+
+    it("persists cart items for the session user and does not reserve stock", async () => {
+        for (let addition = 1; addition <= 2; addition++) {
+            const response = await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+                .send({ productId: product.id, quantity: 1, userId: admin.id, price: 1 }).expect(200);
+            assert.equal(response.body.items[0].id, product.id);
+            assert.equal(response.body.items[0].quantity, addition);
+            assert.equal(response.body.items[0].price, product.price);
+        }
+        const saved = await prisma.cart.findUnique({ where: { userId: customer.id }, include: { items: true } });
+        assert.equal(saved.items[0].quantity, 2);
+        assert.equal(await prisma.cart.count({ where: { userId: admin.id } }), 0);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
+        const restored = await request(app).get("/api/cart").auth(customerToken, { type: "bearer" }).expect(200);
+        assert.equal(restored.body.items[0].quantity, 2);
+    });
+
+    it("rejects non-positive, fractional, string, missing, and excessive quantities", async (t) => {
+        t.mock.method(console, "error", () => {});
+        for (const quantity of [0, -1, 1.5, "2", null, undefined, 2_147_483_648]) {
+            await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+                .send({ productId: product.id, quantity }).expect(400);
+        }
+        assert.equal(await prisma.cartItem.count(), 0);
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 1 }).expect(200);
+        for (const quantity of [0, -1, 1.5, "2", null, undefined, 2_147_483_648]) {
+            await request(app).patch(`/api/cart/items/${product.id}`).auth(customerToken, { type: "bearer" })
+                .send({ quantity }).expect(400);
+        }
+        assert.equal((await prisma.cartItem.findFirst()).quantity, 1);
+    });
+
+    it("rejects unavailable products and aggregate quantities above current stock", async (t) => {
+        t.mock.method(console, "error", () => {});
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: 999999, quantity: 1 }).expect(404);
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 6 }).expect(400);
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 4 }).expect(200);
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 2 }).expect(400);
+        await request(app).patch(`/api/cart/items/${product.id}`).auth(customerToken, { type: "bearer" })
+            .send({ quantity: 6 }).expect(400);
+        assert.equal((await prisma.cartItem.findFirst()).quantity, 4);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
+    });
+
+    it("does not let supplied user IDs or cart IDs cross account boundaries", async () => {
+        for (const token of [customerToken, adminToken]) {
+            await request(app).post("/api/cart/items").auth(token, { type: "bearer" })
+                .send({ productId: product.id, quantity: 1 }).expect(200);
+        }
+        const other = await prisma.cart.findUnique({ where: { userId: admin.id } });
+        const response = await request(app).patch(`/api/cart/items/${product.id}`)
+            .auth(customerToken, { type: "bearer" }).send({ quantity: 3, cartId: other.id, userId: admin.id }).expect(200);
+        assert.equal(response.body.items[0].quantity, 3);
+        const otherItem = () => prisma.cartItem.findFirst({ where: { cartId: other.id } });
+        assert.equal((await otherItem()).quantity, 1);
+        const read = await request(app).get(`/api/cart?cartId=${other.id}&userId=${admin.id}`)
+            .auth(customerToken, { type: "bearer" }).expect(200);
+        assert.equal(read.body.items[0].quantity, 3);
+        await request(app).delete(`/api/cart/items/${product.id}`).auth(customerToken, { type: "bearer" }).expect(200);
+        await request(app).delete(`/api/cart?cartId=${other.id}`).auth(customerToken, { type: "bearer" }).expect(200);
+        assert.equal((await otherItem()).quantity, 1);
+    });
+
+    it("updates and removes only the authenticated user's cart items", async () => {
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 1 }).expect(200);
+        const updated = await request(app).patch(`/api/cart/items/${product.id}`).auth(customerToken, { type: "bearer" })
+            .send({ quantity: 3 }).expect(200);
+        assert.equal(updated.body.items[0].quantity, 3);
+        const cleared = await request(app).delete("/api/cart").auth(customerToken, { type: "bearer" }).expect(200);
+        assert.deepEqual(cleared.body.items, []);
+        assert.equal(await prisma.cartItem.count(), 0);
+    });
+
+    it("rejects expired and deleted sessions before saving cart data", async () => {
+        const expired = jwt.sign({ sub: customer.id }, process.env.JWT_SECRET, { expiresIn: -1 });
+        await request(app).post("/api/cart/items").auth(expired, { type: "bearer" })
+            .send({ productId: product.id, quantity: 1 }).expect(401);
+        await prisma.user.delete({ where: { id: customer.id } });
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 1 }).expect(401);
+        assert.equal(await prisma.cart.count(), 0);
+    });
+
+    it("revalidates current prices and ignores a forged checkout item list", async () => {
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 2 }).expect(200);
+        await prisma.product.update({ where: { id: product.id }, data: { price: 125 } });
+        const placed = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({
+            items: [{ productId: 0, quantity: -10, price: 1 }], total: 1, userId: admin.id,
+        }).expect(201);
+        assert.equal(placed.body.total, 250);
+        assert.equal(placed.body.items[0].quantity, 2);
+        assert.equal(placed.body.items[0].price, 125);
+        assert.equal(placed.body.userId, customer.id);
+        assert.equal(await prisma.cartItem.count(), 0);
+    });
+
+    it("cannot checkout another user's cart by supplying its ID", async (t) => {
+        t.mock.method(console, "error", () => {});
+        await request(app).post("/api/cart/items").auth(adminToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 1 }).expect(200);
+        const other = await prisma.cart.findUnique({ where: { userId: admin.id } });
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .send({ cartId: other.id, userId: admin.id }).expect(400);
+        assert.equal(await prisma.order.count(), 0);
+        assert.equal(await prisma.cartItem.count(), 1);
+    });
+
+    it("revalidates saved quantities and preserves the cart on failed checkout", async (t) => {
+        t.mock.method(console, "error", () => {});
+        await prisma.cart.create({ data: {
+            userId: customer.id, items: { create: { productId: product.id, quantity: -1 } },
+        } });
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({}).expect(400);
+        assert.equal(await prisma.order.count(), 0);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
+        assert.equal(await prisma.cartItem.count(), 1);
     });
 });

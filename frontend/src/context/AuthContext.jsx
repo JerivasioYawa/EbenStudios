@@ -1,45 +1,78 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AuthContext from "./auth-context";
 import { login as apiLogin, register as apiRegister, getCurrentUser } from "../service/authService";
-
-const TOKEN_KEY = "eben_auth_token";
+import { clearSession, getSessionToken, saveSessionToken, SESSION_CHANGED, SESSION_EXPIRED_MESSAGE, TOKEN_KEY } from "../service/session";
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(() => Boolean(localStorage.getItem(TOKEN_KEY)));
+    const [session, setSession] = useState(() => ({ user: null, loading: Boolean(getSessionToken()), sessionError: "", sessionId: 0 }));
+    const operation = useRef(0);
 
     useEffect(() => {
-        if (!localStorage.getItem(TOKEN_KEY)) {
-            return;
+        let active = true;
+        localStorage.removeItem("eben_cart_items");
+
+        async function restore(token) {
+            try {
+                const user = await getCurrentUser({ sessionToken: token });
+                if (active && token === getSessionToken()) {
+                    setSession((current) => ({ user, loading: false, sessionError: "", sessionId: current.sessionId + 1 }));
+                }
+            } catch {
+                if (active && token === getSessionToken()) {
+                    setSession((current) => ({ user: null, loading: false, sessionId: current.sessionId + 1,
+                        sessionError: "Unable to verify your session. Please log in again." }));
+                }
+            }
         }
 
-        getCurrentUser()
-            .then(setUser)
-            .catch(() => localStorage.removeItem(TOKEN_KEY))
-            .finally(() => setLoading(false));
+        function onSessionChanged(event) {
+            operation.current++;
+            setSession((current) => ({ user: null, loading: false, sessionId: current.sessionId + 1,
+                sessionError: event.detail?.reason === "expired" ? SESSION_EXPIRED_MESSAGE : "" }));
+        }
+
+        function onStorage(event) {
+            if (event.key !== TOKEN_KEY && event.key !== null) return;
+            operation.current++;
+            const token = getSessionToken();
+            setSession((current) => ({ user: null, loading: Boolean(token), sessionError: "", sessionId: current.sessionId + 1 }));
+            if (token) void restore(token);
+        }
+
+        window.addEventListener(SESSION_CHANGED, onSessionChanged);
+        window.addEventListener("storage", onStorage);
+        const token = getSessionToken();
+        if (token) void restore(token);
+        return () => {
+            active = false;
+            window.removeEventListener(SESSION_CHANGED, onSessionChanged);
+            window.removeEventListener("storage", onStorage);
+        };
     }, []);
 
-    async function login(email, password) {
-        const { user: loggedInUser, token } = await apiLogin(email, password);
-        localStorage.setItem(TOKEN_KEY, token);
-        setUser(loggedInUser);
-        return loggedInUser;
+    async function authenticate(action) {
+        const currentOperation = ++operation.current;
+        const { user, token } = await action();
+        if (currentOperation !== operation.current) throw new Error("Sign-in was cancelled. Please try again.");
+        saveSessionToken(token);
+        setSession((current) => ({ user, loading: false, sessionError: "", sessionId: current.sessionId + 1 }));
+        return user;
     }
 
-    async function register(name, email, password) {
-        const { user: newUser, token } = await apiRegister(name, email, password);
-        localStorage.setItem(TOKEN_KEY, token);
-        setUser(newUser);
-        return newUser;
+    function login(email, password) {
+        return authenticate(() => apiLogin(email, password));
+    }
+
+    function register(name, email, password) {
+        return authenticate(() => apiRegister(name, email, password));
     }
 
     function logout() {
-        localStorage.removeItem(TOKEN_KEY);
-        setUser(null);
+        clearSession();
     }
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+        <AuthContext.Provider value={{ ...session, login, register, logout }}>
             {children}
         </AuthContext.Provider>
     );

@@ -28,7 +28,10 @@ Set-Location ..
 
 Node's test runner and Supertest exercise the exported Express app, including
 authentication, role permissions, catalogue and image uploads, checkout,
-inventory rollback, order privacy, and order status changes. Each run applies
+inventory rollback, order privacy, and order status changes. Authenticated cart
+coverage includes ownership, positive integer quantities, stock availability,
+expired sessions, and checkout from saved cart contents using current prices.
+Each run applies
 the committed migrations to its own temporary SQLite database and removes it
 afterward. Uploads are temporary too. The app module does not open a listener;
 Supertest manages its own temporary server.
@@ -43,7 +46,8 @@ Set-Location ..
 ```
 
 Vitest uses React, jsdom, Testing Library, and jest-dom. The tests cover cart
-totals, persistence, removal and corrupt storage, plus admin route access.
+totals, persistence, removal, legacy storage isolation, protected routes, safe
+login return URLs, account changes, and central expired-session handling.
 DOM cleanup and storage resets run after each test. Only tests under `src/`
 are collected by Vitest, so Playwright specs are kept separate.
 
@@ -68,6 +72,13 @@ order history, failed login, and protected routes. The admin journeys cover
 login, product creation with an image, editing, deletion, and updating an order
 status that the customer can then see. API requests use the real test server;
 only external placeholder images are fulfilled locally.
+
+The authenticated-cart journeys also check guest login redirects, full product
+URL restoration, guest API rejection, persistent carts separated by account,
+logout clearing, and a real expired-session cart API failure followed by login.
+After Phase 3, the expected totals are 25 API tests, 28 frontend tests, and eight
+Chromium journeys. The [Phase 3 record](docs/phases/phase-03-authenticated-carts/README.md)
+contains the API contract, migration steps, and detailed checkpoint results.
 
 Set `E2E_PORT` or `E2E_API_PORT` to use different local ports:
 

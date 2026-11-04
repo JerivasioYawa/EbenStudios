@@ -1,5 +1,6 @@
 import AppRoutes from "./routes/AppRoutes";
+import SessionBoundary from "./routes/SessionBoundary";
 
 export default function App() {
-    return <AppRoutes />;
+    return <SessionBoundary><AppRoutes /></SessionBoundary>;
 }

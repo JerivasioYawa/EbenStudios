@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import MainLayout from "../components/layout/MainLayout";
 import AdminLayout from "../components/admin/AdminLayout";
 import AdminRoute from "./AdminRoute";
+import ProtectedRoute from "./ProtectedRoute";
 
 import Home from "../pages/Home";
 import Shop from "../pages/Shop";
@@ -29,8 +30,10 @@ export default function AppRoutes() {
                 <Route path="/" element={<Home />} />
                 <Route path="/shop" element={<Shop />} />
                 <Route path="/products/:id" element={<ProductPage />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/checkout" element={<Checkout />} />
+                <Route element={<ProtectedRoute />}>
+                    <Route path="/cart" element={<Cart />} />
+                    <Route path="/checkout" element={<Checkout />} />
+                </Route>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/profile" element={<Profile />} />

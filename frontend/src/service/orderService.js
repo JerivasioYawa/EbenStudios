@@ -10,8 +10,8 @@ export async function getMyOrders() {
     return data;
 }
 
-export async function createOrder(order) {
-    const { data } = await api.post("/orders", order);
+export async function createOrder(order, config = {}) {
+    const { data } = await api.post("/orders", order, config);
     return data;
 }
 

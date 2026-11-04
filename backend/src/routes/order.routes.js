@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { isPositiveInteger } from "../lib/cart.js";
 
 const router = Router();
 
@@ -24,37 +25,46 @@ router.get("/", requireAuth, requireAdmin, async (req, res, next) => {
 
 router.post("/", requireAuth, async (req, res, next) => {
     try {
-        const { items, shippingAddress } = req.body;
-
-        if (!Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({ message: "Cart is empty" });
-        }
+        const { shippingAddress } = req.body ?? {};
 
         const order = await prisma.$transaction(async (tx) => {
+            const cart = await tx.cart.findUnique({
+                where: { userId: req.user.sub },
+                include: { items: { orderBy: { id: "asc" } } },
+            });
+            if (!cart?.items.length) {
+                throw Object.assign(new Error("Cart is empty"), { status: 400 });
+            }
             let total = 0;
             const orderItemsData = [];
 
-            for (const { productId, quantity } of items) {
-                const product = await tx.product.findUnique({ where: { id: Number(productId) } });
+            for (const { productId, quantity } of cart.items) {
+                if (!isPositiveInteger(quantity)) {
+                    throw Object.assign(new Error("Quantity must be a positive integer."), { status: 400 });
+                }
+                const product = await tx.product.findUnique({ where: { id: productId } });
 
                 if (!product) {
                     throw Object.assign(new Error("A product in your cart no longer exists"), { status: 400 });
                 }
 
-                if (product.stock < quantity) {
-                    throw Object.assign(new Error(`Not enough stock for "${product.name}"`), { status: 400 });
+                if (!Number.isFinite(product.price) || product.price < 0) {
+                    throw Object.assign(new Error(`Price is unavailable for "${product.name}"`), { status: 400 });
                 }
 
-                await tx.product.update({
-                    where: { id: product.id },
+                const reserved = await tx.product.updateMany({
+                    where: { id: product.id, stock: { gte: quantity } },
                     data: { stock: { decrement: quantity } },
                 });
+                if (reserved.count !== 1) {
+                    throw Object.assign(new Error(`Not enough stock for "${product.name}"`), { status: 400 });
+                }
 
                 total += product.price * quantity;
                 orderItemsData.push({ productId: product.id, quantity, price: product.price });
             }
 
-            return tx.order.create({
+            const created = await tx.order.create({
                 data: {
                     userId: req.user.sub,
                     total,
@@ -63,6 +73,8 @@ router.post("/", requireAuth, async (req, res, next) => {
                 },
                 include: { items: { include: { product: true } } },
             });
+            await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+            return created;
         });
 
         res.status(201).json(order);

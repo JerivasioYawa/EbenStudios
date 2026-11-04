@@ -46,9 +46,13 @@ test("admin fulfils an order and the customer sees the persisted status", async 
     const { token } = await registration.json();
     const catalogue = await request.get(`${apiURL}/products`);
     const product = (await catalogue.json()).find((item) => item.name === "Movement Cap");
+    const added = await request.post(`${apiURL}/cart/items`, {
+        headers: { Authorization: `Bearer ${token}` }, data: { productId: product.id, quantity: 1 },
+    });
+    expect(added.status()).toBe(200);
     const placed = await request.post(`${apiURL}/orders`, {
         headers: { Authorization: `Bearer ${token}` },
-        data: { items: [{ productId: product.id, quantity: 1 }], shippingAddress: "20 Test Road, Cape Town, 8001" },
+        data: { shippingAddress: "20 Test Road, Cape Town, 8001" },
     });
     expect(placed.status()).toBe(201);
     const order = await placed.json();

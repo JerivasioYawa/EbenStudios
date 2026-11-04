@@ -16,7 +16,11 @@ test("customer registers, logs back in, shops, checks out, and sees their order"
     await expect(page.getByRole("heading", { name: "Woodstock Hoodie", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Add to Cart", exact: true }).click();
     await page.getByRole("link", { name: "Cart", exact: true }).click();
+    const quantityResponse = page.waitForResponse((response) =>
+        response.url() === `${apiURL}/cart/items/${hoodie.id}` && response.request().method() === "PATCH");
     await page.getByRole("button", { name: "Increase quantity", exact: true }).click();
+    expect((await quantityResponse).status()).toBe(200);
+    await expect(page.getByRole("button", { name: "Increase quantity", exact: true })).toBeEnabled();
     await page.reload();
     await expect(page.getByRole("heading", { name: "Woodstock Hoodie", exact: true })).toBeVisible();
     await page.getByRole("link", { name: "Proceed to Checkout", exact: true }).click();
