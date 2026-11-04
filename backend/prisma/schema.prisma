@@ -20,6 +20,9 @@ model User {
   stockAdjustments StockAdjustment[]
   orderEvents      OrderEvent[]
   paymentRecords   PaymentRecord[]
+  invoices         Invoice[]         @relation("InvoiceCustomer")
+  issuedInvoices   Invoice[]         @relation("InvoiceIssuer")
+  invoiceEvents    InvoiceEvent[]
   createdAt        DateTime          @default(now())
 }
 
@@ -63,6 +66,8 @@ model Order {
   history           OrderEvent[]
   payments          PaymentRecord[]
   stockAdjustments  StockAdjustment[]
+
+  invoices Invoice[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
@@ -192,4 +197,84 @@ model PaymentRecord {
 
   @@unique([orderId, kind])
   @@index([createdAt])
+}
+
+model Invoice {
+  id                        Int            @id @default(autoincrement())
+  number                    String         @unique
+  order                     Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderId                   Int
+  orderNumber               String
+  orderPlacedAt             DateTime
+  customer                  User           @relation("InvoiceCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  customerId                Int
+  revision                  Int            @default(1)
+  supersedes                Invoice?       @relation("InvoiceCorrection", fields: [supersedesId], references: [id], onDelete: Restrict)
+  supersedesId              Int?           @unique
+  supersededBy              Invoice?       @relation("InvoiceCorrection")
+  status                    String         @default("Draft")
+  issuedAt                  DateTime       @default(now())
+  issuedBy                  User?          @relation("InvoiceIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedById                Int?
+  issuedByName              String
+  issuedByEmail             String
+  sellerName                String
+  sellerAddress             String
+  sellerEmail               String
+  sellerPhone               String?
+  sellerRegistrationNumber  String?
+  sellerTaxNumber           String?
+  billingName               String
+  billingAddress            String
+  billingEmail              String
+  billingRegistrationNumber String?
+  billingTaxNumber          String?
+  currency                  String         @default("ZAR")
+  totalCents                Int
+  adjustmentCents           Int            @default(0)
+  notes                     String?
+  voidedAt                  DateTime?
+  voidReason                String?
+  lines                     InvoiceLine[]
+  history                   InvoiceEvent[]
+
+  @@unique([orderId, revision])
+  @@index([customerId, issuedAt])
+  @@index([status, issuedAt])
+}
+
+model InvoiceLine {
+  id                 Int     @id @default(autoincrement())
+  invoice            Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  invoiceId          Int
+  position           Int
+  sourceOrderItemId  Int
+  productName        String
+  productDescription String?
+  quantity           Int
+  unitPriceCents     Int
+  lineTotalCents     Int
+
+  @@unique([invoiceId, position])
+}
+
+model InvoiceEvent {
+  id               Int      @id @default(autoincrement())
+  invoice          Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  invoiceId        Int
+  actor            User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId          Int?
+  actorName        String
+  actorEmail       String
+  type             String
+  reason           String?
+  relatedInvoiceId Int?
+  createdAt        DateTime @default(now())
+
+  @@index([invoiceId, createdAt])
+}
+
+model InvoiceSequence {
+  id    Int @id
+  value Int @default(0)
 }

@@ -1,6 +1,7 @@
 import { prisma } from "./prisma.js";
 import { inputError } from "./money.js";
 import { actorData, adminTransaction, choice, integer, MAX_INT, stockRecord, text } from "./admin.js";
+import { voidInvoicesForCancellation } from "./invoices.js";
 
 export const paymentStatuses = ["Pending", "Unverified", "Confirmed", "RefundRequired", "Refunded"];
 export const fulfilmentStatuses = ["Unfulfilled", "Processing", "Shipped", "Delivered", "Cancelled"];
@@ -54,6 +55,7 @@ export async function changeFulfilment(user, orderId, body) {
                 stockRestoredAt = new Date();
             }
             if (paymentStatus === "Confirmed") paymentStatus = "RefundRequired";
+            await voidInvoicesForCancellation(tx, user, orderId, reason);
         }
         const saved = await tx.order.update({ where: { id: orderId }, data: {
             fulfilmentStatus: target, paymentStatus, stockRestoredAt,

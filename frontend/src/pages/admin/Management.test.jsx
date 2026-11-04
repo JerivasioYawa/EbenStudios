@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import * as service from "../../service/adminService";
 import * as products from "../../service/productService";
+import * as invoiceService from "../../service/invoiceService";
 import Products from "./Products";
 import Orders from "./Orders";
 import Dashboard from "./Dashboard";
@@ -13,6 +14,7 @@ vi.mock("../../service/adminService", () => ({
     adjustStock: vi.fn(), archiveProduct: vi.fn(), cancelOrder: vi.fn(), changeFulfilment: vi.fn(), confirmPayment: vi.fn(), recordRefund: vi.fn(), updateShipping: vi.fn(),
 }));
 vi.mock("../../service/productService", () => ({ createProduct: vi.fn(), updateProduct: vi.fn(), deleteProduct: vi.fn() }));
+vi.mock("../../service/invoiceService", () => ({ getInvoices: vi.fn(), getInvoiceConfig: vi.fn(), issueInvoice: vi.fn() }));
 const product = { id: 1, name: "Admin Tee", price: 0.29, priceCents: 29, stock: 2, lowStockThreshold: 3, lowStock: true, archivedAt: null };
 const page = items => ({ items, total: items.length, page: 1, pageSize: 10, totalPages: 1 });
 const order = { id: 7, customerName: "Saved Customer", customerEmail: "customer@example.test", shippingAddress: "Saved Street", totalCents: 87,
@@ -23,6 +25,7 @@ beforeEach(() => {
     service.getAdminOrders.mockResolvedValue(page([order]));
     service.getAdminOrder.mockResolvedValue(order);
     service.getAudit.mockResolvedValue(page([]));
+    invoiceService.getInvoices.mockResolvedValue(page([]));
 });
 const show = (element, path = "/admin") => render(<MemoryRouter initialEntries={[path]}>{element}</MemoryRouter>);
 

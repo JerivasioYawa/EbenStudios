@@ -1,11 +1,12 @@
 import { NavLink, Outlet, Link } from "react-router-dom";
-import { LayoutDashboard, Package, ClipboardList, LogOut, Store } from "lucide-react";
+import { LayoutDashboard, Package, ClipboardList, FileText, LogOut, Store } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 
 const links = [
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/admin/products", label: "Products", icon: Package },
     { to: "/admin/orders", label: "Orders", icon: ClipboardList },
+    { to: "/admin/invoices", label: "Invoices", icon: FileText },
 ];
 
 function linkClass({ isActive }) {

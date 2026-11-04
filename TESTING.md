@@ -45,6 +45,12 @@ and cleanup, payment evidence, enforced fulfilment transitions, concurrent
 cancellation, stock rollback and dashboard payment/refund aggregates. The admin
 migration test preserves original records and CHECK constraints while marking
 legacy payment labels Unverified instead of inventing receipts.
+Invoice assertions use independent PDF.js text/page parsing to verify exact cents,
+long documents, accented names and numeric bounds. They also check concurrent
+issuance/correction, snapshot sealing, private ownership, download headers, void
+history, cancellation integration and unchanged payment state. Invoice fixtures
+use unique accounts/orders and remain until temporary database teardown because
+issued invoices and their history cannot be deleted.
 Each run applies the committed migrations to its own temporary SQLite database and removes it
 afterward. Uploads are temporary too. The app module does not open a listener;
 Supertest manages its own temporary server.
@@ -69,6 +75,9 @@ persisted retry keys, failed responses, cart changes, account isolation and requ
 Admin interface tests cover filters/pages, stock-safe product editing, optional
 field clearing, required reasons, server rejection messages, payment controls,
 pending-input disabling, stale search suppression and server-provided financial totals.
+Invoice tests cover seller/billing forms, correction/void reasons, read-only
+amounts, customer-only lists, access failures and authenticated blob downloads,
+including object URL cleanup and rejection after an account switch.
 DOM cleanup and storage resets run after each test. Only tests under `src/`
 are collected by Vitest, so Playwright specs are kept separate.
 
@@ -107,10 +116,14 @@ Admin journeys also search/page products, archive/restore, inspect stock history
 confirm full payments, process/ship orders, cancel with once-only stock restoration,
 record a processed refund and check the dashboard against API totals. Browser
 page errors and unexpected application console errors are checked for these flows.
-After Phase 6, the expected totals are 60 backend tests (55 API and 5 migration),
-60 frontend tests, and 14 Chromium journeys. The
-[Phase 6 record](docs/phases/phase-06-admin-management/README.md) contains management
-contracts, migration/backfill policy, disposable-copy verification and checkpoint evidence.
+Invoice journeys issue from real order details, download PDFs in both admin and
+customer sessions, correct billing details, verify ID substitution is denied,
+download a complete eight-page order and retain a marked voided document. Browser
+seller details are synthetic; no local invoice defaults are required.
+After Phase 7, the expected totals are 74 backend tests (55 existing API, 13 invoice
+and PDF, 6 migration), 71 frontend tests, and 16 Chromium journeys. The
+[Phase 7 record](docs/phases/phase-07-invoices/README.md) contains invoice contracts,
+snapshots, private download rules, migration verification and optional PDF previews.
 
 Set `E2E_PORT` or `E2E_API_PORT` to use different local ports:
 

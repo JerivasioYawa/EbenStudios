@@ -5,9 +5,17 @@ import { checkoutKey, placeOrder, shippingAddress } from "../lib/checkout.js";
 import { orderDto } from "../lib/serializers.js";
 import { changeFulfilment } from "../lib/order-management.js";
 import { id } from "../lib/admin.js";
+import { invoiceDto, issueInvoice } from "../lib/invoices.js";
 
 const router = Router();
 const VALID_STATUSES = ["Processing", "Shipped", "Delivered", "Cancelled"];
+
+router.post("/:id/invoice", requireAuth, requireAdmin, async (req, res, next) => {
+    try {
+        const { invoice, replayed } = await issueInvoice(req.user, id(req.params.id), req.body || {});
+        res.set("Invoice-Replayed", String(replayed)).status(replayed ? 200 : 201).json(invoiceDto(invoice, true));
+    } catch (error) { next(error); }
+});
 
 router.get("/", requireAuth, requireAdmin, async (req, res, next) => {
     try {

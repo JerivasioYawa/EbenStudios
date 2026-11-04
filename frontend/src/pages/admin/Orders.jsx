@@ -4,6 +4,7 @@ import { cancelOrder, changeFulfilment, confirmPayment, getAdminOrder, getAdminO
 import { useAdminQuery } from "../../hooks/useAdminQuery";
 import { actionClass, fieldClass, Pagination, QueryState } from "../../components/admin/ManagementControls";
 import { formatMoney } from "../../lib/money";
+import OrderInvoices from "../../components/invoices/OrderInvoices";
 
 function OrderControls({ order, pending, mutate }) {
     const [reference, setReference] = useState(""), [refundReference, setRefundReference] = useState("");
@@ -63,6 +64,7 @@ function OrderDetails({ id, close, changed }) {
             <ul>{order.payments.map(payment => <li key={payment.id} className="py-2 border-b">{payment.kind}: {formatMoney(payment.amountCents)} · {payment.reference}<br /><span className="text-sm text-neutral-500">{payment.actorName} · {new Date(payment.createdAt).toLocaleString()}</span></li>)}</ul>
             <h3 className="font-bold mt-8 mb-3">Order history</h3>
             <ol>{order.history.map(event => <li key={event.id} className="py-2 border-b">{event.type}{event.toStatus ? ": " + event.toStatus : ""}{event.note ? " · " + event.note : ""}<br /><span className="text-sm text-neutral-500">{event.actorName} · {new Date(event.createdAt).toLocaleString()}</span></li>)}</ol>
+            <OrderInvoices order={order} />
         </>}
     </section>;
 }

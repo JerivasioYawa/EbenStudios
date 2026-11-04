@@ -39,6 +39,12 @@ export default defineConfig({
                 JWT_SECRET: process.env.E2E_SERVER_TOKEN,
                 ADMIN_EMAIL: process.env.E2E_ADMIN_EMAIL,
                 ADMIN_PASSWORD: process.env.E2E_ADMIN_PASSWORD,
+                INVOICE_SELLER_NAME: "Eben Browser Test Seller",
+                INVOICE_SELLER_ADDRESS: "7 Test Seller Road, Cape Town",
+                INVOICE_SELLER_EMAIL: "seller@invoice.test",
+                INVOICE_SELLER_PHONE: "",
+                INVOICE_SELLER_REGISTRATION_NUMBER: "",
+                INVOICE_SELLER_TAX_NUMBER: "",
             },
         },
         {

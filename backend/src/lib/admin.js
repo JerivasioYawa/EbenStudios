@@ -45,6 +45,7 @@ export async function adminTransaction(user, action, entityType, entityId, reaso
                 const audit = await tx.adminAudit.create({ data: { ...actorData(user), action, entityType, entityId, reason } });
                 const result = await mutate(tx);
                 await tx.adminAudit.update({ where: { id: audit.id }, data: {
+                    action: result.action ?? action,
                     entityId: result.entityId ?? entityId,
                     beforeJson: result.before ? JSON.stringify(result.before) : null,
                     afterJson: result.after ? JSON.stringify(result.after) : null,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getMyOrders } from "../service/orderService";
 import { formatMoney } from "../lib/money";
@@ -101,6 +101,7 @@ export default function Orders() {
 
                             {order.adjustmentCents !== 0 && <div className="flex justify-between mb-4 text-sm"><span>Adjustment</span><span>{formatMoney(order.adjustmentCents)}</span></div>}
                             <div className="flex items-center justify-between border-t border-black/5 pt-4">
+                                <Link className="underline text-sm" to={`/invoices?orderId=${order.id}`}>View invoices</Link>
                                 <span className="text-neutral-500">Total</span>
                                 <span className="font-bold">{formatMoney(order.totalCents)}</span>
                             </div>

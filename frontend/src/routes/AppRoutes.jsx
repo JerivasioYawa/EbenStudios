@@ -15,6 +15,7 @@ import Login from "../pages/Login";
 import Register from "../pages/Register";
 import Profile from "../pages/Profile";
 import Orders from "../pages/Orders";
+import Invoices from "../pages/Invoices";
 import About from "../pages/About";
 import Contact from "../pages/Contact";
 import NotFound from "../pages/NotFound";
@@ -35,6 +36,8 @@ export default function AppRoutes() {
                 <Route element={<ProtectedRoute />}>
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/checkout" element={<Checkout />} />
+                    <Route path="/invoices" element={<Invoices />} />
+                    <Route path="/invoices/:id" element={<Invoices />} />
                 </Route>
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -57,6 +60,7 @@ export default function AppRoutes() {
                 <Route index element={<AdminDashboard />} />
                 <Route path="products" element={<AdminProducts />} />
                 <Route path="orders" element={<AdminOrders />} />
+                <Route path="invoices" element={<Invoices admin />} />
             </Route>
         </Routes>
     );

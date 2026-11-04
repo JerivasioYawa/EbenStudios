@@ -7,11 +7,12 @@ import orderRoutes from "./routes/order.routes.js";
 import cartRoutes from "./routes/cart.routes.js";
 import likeRoutes from "./routes/like.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
+import invoiceRoutes from "./routes/invoice.routes.js";
 import { uploadsDirPath } from "./middleware/upload.js";
 
 const app = express();
 
-app.use(cors());
+app.use(cors({ exposedHeaders: ["Content-Disposition", "Invoice-Replayed"] }));
 app.use(express.json());
 app.use("/uploads", express.static(uploadsDirPath));
 
@@ -23,6 +24,7 @@ app.use("/api/orders", orderRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/likes", likeRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/invoices", invoiceRoutes);
 
 app.use((req, res) => {
     res.status(404).json({ message: "Not found" });

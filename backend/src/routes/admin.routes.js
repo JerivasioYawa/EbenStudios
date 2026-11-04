@@ -79,7 +79,7 @@ router.get("/products/:id/history", async (req, res, next) => {
 router.get("/audit", async (req, res, next) => {
     try {
         const paging = pagination(req.query);
-        const entityType = choice(req.query.entityType, ["Product", "Order"]);
+        const entityType = choice(req.query.entityType, ["Product", "Order", "Invoice"]);
         const entityId = req.query.entityId === undefined ? undefined : id(req.query.entityId);
         const where = { entityType, entityId };
         const [items, total] = await prisma.$transaction([
