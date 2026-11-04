@@ -9,4 +9,3 @@ These eight folders extend the ZIP’s phase approach. The supplied improvement 
 - [05-interface-integration: Customer and administrator integration](05-interface-integration/README.md)
 - [06-accessibility-and-uploads: Accessible controls and constrained uploads](06-accessibility-and-uploads/README.md)
 - [07-verification-and-handover: Regression verification and handover](07-verification-and-handover/README.md)
-- [08-individual-report: Final individual reflection and assessment](08-individual-report/README.md)

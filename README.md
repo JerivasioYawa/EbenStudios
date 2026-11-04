@@ -7,7 +7,7 @@ React storefront and Express/Prisma/SQLite API for the Eben Studios streetwear p
 1. Use Node.js **24.x**, npm and Git.
 2. Follow [local setup](docs/LOCAL-SETUP.md), including private environment values.
 3. Work through [eight phases](docs/phases/README.md) and their checkpoints.
-4. Read [verification results](docs/testing/RESULTS.md) and run the pending browser checks on your computer.
+4. Read [verification results](docs/testing/RESULTS.md) and run the browser checks on your computer.
 5. Use [deployment instructions](docs/DEPLOYMENT.md) when ready to host the API and frontend.
 6. Publish with [GitHub handover](docs/GITHUB-HANDOVER.md).
 
@@ -24,7 +24,7 @@ React storefront and Express/Prisma/SQLite API for the Eben Studios streetwear p
 | `backend/tests` | Unit, HTTP integration and legacy migration tests |
 | `frontend/src` | Customer/admin screens, services, hooks and shared components |
 | `frontend/tests` | Repeatable browser smoke journey |
-| `docs/phases/01-*` through `08-*` | Phase-specific implementation, commands and checkpoints |
+| `docs/phases/01-*` through `07-*` | Phase-specific implementation, commands and checkpoints |
 | `docs/testing` | Actual command output and pending manual verification |
 | `docs/DATA-DESIGN.md` | Implemented ERD and constraints |
 
