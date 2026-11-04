@@ -1,18 +1,26 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
-    const adminPassword = await bcrypt.hash("admin123", 10);
+    const adminEmail = process.env.ADMIN_EMAIL?.trim();
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword?.trim()) {
+        throw new Error("ADMIN_EMAIL and ADMIN_PASSWORD must be set before seeding.");
+    }
+
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
     await prisma.user.upsert({
-        where: { email: "admin@ebenstudios.com" },
+        where: { email: adminEmail },
         update: {},
         create: {
             name: "Admin",
-            email: "admin@ebenstudios.com",
-            password: adminPassword,
+            email: adminEmail,
+            password: hashedPassword,
             role: "ADMIN",
         },
     });
@@ -32,7 +40,7 @@ async function main() {
         });
     }
 
-    console.log("Seed complete. Admin login: admin@ebenstudios.com / admin123");
+    console.log("Seed complete.");
 }
 
 main()
