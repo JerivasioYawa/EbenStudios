@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { DollarSign, ShoppingBag, Users, Package } from "lucide-react";
 import { getProducts } from "../../service/productService";
 import { getOrders } from "../../service/orderService";
+import { formatMoney } from "../../lib/money";
 
 export default function Dashboard() {
     const [products, setProducts] = useState([]);
@@ -19,11 +20,11 @@ export default function Dashboard() {
             .finally(() => setLoading(false));
     }, []);
 
-    const revenue = orders.reduce((sum, order) => sum + Number(order.total), 0);
+    const revenueCents = orders.reduce((sum, order) => sum + BigInt(order.totalCents), 0n);
     const customerCount = new Set(orders.map((order) => order.userId)).size;
 
     const stats = [
-        { label: "Revenue", value: `R ${revenue.toLocaleString()}`, icon: DollarSign },
+        { label: "Revenue", value: formatMoney(revenueCents), icon: DollarSign },
         { label: "Orders", value: orders.length, icon: ShoppingBag },
         { label: "Customers", value: customerCount, icon: Users },
         { label: "Products", value: products.length, icon: Package },
@@ -77,9 +78,9 @@ export default function Dashboard() {
                             {orders.slice(0, 5).map((order) => (
                                 <tr key={order.id} className="border-b border-black/5 last:border-0">
                                     <td className="px-6 py-4 font-semibold">#EB-{order.id}</td>
-                                    <td className="px-6 py-4 text-neutral-600">{order.user?.name}</td>
+                                    <td className="px-6 py-4 text-neutral-600">{order.customerName}</td>
                                     <td className="px-6 py-4 text-neutral-600">
-                                        R {Number(order.total).toLocaleString()}
+                                        {formatMoney(order.totalCents)}
                                     </td>
                                 </tr>
                             ))}

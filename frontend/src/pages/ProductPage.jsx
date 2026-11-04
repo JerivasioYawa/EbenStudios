@@ -7,6 +7,7 @@ import { returnTo } from "../lib/loginReturn";
 import { getProductImage } from "../lib/productImage";
 import Button from "../components/ui/Button";
 import LikeButton from "../components/products/LikeButton";
+import { formatMoney } from "../lib/money";
 
 export default function ProductPage() {
     const { id } = useParams();
@@ -102,7 +103,7 @@ export default function ProductPage() {
                     </div>
 
                     <p className="text-2xl font-semibold mb-6">
-                        R {Number(product.price).toLocaleString()}
+                        {formatMoney(product.priceCents)}
                     </p>
 
                     {product.description && (

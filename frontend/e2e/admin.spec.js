@@ -21,7 +21,7 @@ test("admin logs in, creates and edits a product with an image, then deletes it"
     await page.getByPlaceholder("Price", { exact: true }).fill("799");
     await page.getByPlaceholder("Stock", { exact: true }).fill("6");
     await page.getByRole("button", { name: "Save Changes", exact: true }).click();
-    await expect(row.getByRole("cell", { name: "R 799", exact: true })).toBeVisible();
+    await expect(row.getByRole("cell", { name: "R 799.00", exact: true })).toBeVisible();
     await page.reload();
     await expect(row.getByRole("cell", { name: "6", exact: true })).toBeVisible();
     await row.getByRole("button", { name: "Delete", exact: true }).click();
@@ -51,7 +51,7 @@ test("admin fulfils an order and the customer sees the persisted status", async 
     });
     expect(added.status()).toBe(200);
     const placed = await request.post(`${apiURL}/orders`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "Idempotency-Key": randomUUID() },
         data: { shippingAddress: "20 Test Road, Cape Town, 8001" },
     });
     expect(placed.status()).toBe(201);

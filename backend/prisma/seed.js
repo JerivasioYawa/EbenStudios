@@ -26,10 +26,10 @@ async function main() {
     });
 
     const products = [
-        { name: "Woodstock Hoodie", price: 1199, stock: 24, tag: "New" },
-        { name: "Streets Tee", price: 549, stock: 58, tag: "Best Seller" },
-        { name: "Culture Bomber", price: 2399, stock: 6, tag: "Limited" },
-        { name: "Movement Cap", price: 399, stock: 40, tag: "New" },
+        { name: "Woodstock Hoodie", priceCents: 119900, stock: 24, tag: "New" },
+        { name: "Streets Tee", priceCents: 54900, stock: 58, tag: "Best Seller" },
+        { name: "Culture Bomber", priceCents: 239900, stock: 6, tag: "Limited" },
+        { name: "Movement Cap", priceCents: 39900, stock: 40, tag: "New" },
     ];
 
     for (const product of products) {

@@ -2,8 +2,17 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { upload, deleteLocalUpload } from "../middleware/upload.js";
+import { inputError, parsePriceCents } from "../lib/money.js";
+import { productDto } from "../lib/serializers.js";
 
 const router = Router();
+
+function parseStock(value) {
+    if (typeof value === "string" && !/^\d+$/.test(value)) throw inputError("Stock must be a non-negative integer.");
+    const stock = Number(value);
+    if (!Number.isSafeInteger(stock) || stock < 0 || stock > 2_147_483_647) throw inputError("Stock must be a non-negative integer.");
+    return stock;
+}
 
 function buildImageUrl(req) {
     if (!req.file) {
@@ -16,7 +25,7 @@ function buildImageUrl(req) {
 router.get("/", async (req, res, next) => {
     try {
         const products = await prisma.product.findMany({ orderBy: { createdAt: "desc" } });
-        res.json(products);
+        res.json(products.map(productDto));
     } catch (err) {
         next(err);
     }
@@ -30,7 +39,7 @@ router.get("/:id", async (req, res, next) => {
             return res.status(404).json({ message: "Product not found" });
         }
 
-        res.json(product);
+        res.json(productDto(product));
     } catch (err) {
         next(err);
     }
@@ -44,14 +53,14 @@ router.post("/", requireAuth, requireAdmin, upload.single("image"), async (req, 
             data: {
                 name,
                 description,
-                price: Number(price),
-                stock: Number(stock ?? 0),
+                priceCents: parsePriceCents(price),
+                stock: parseStock(stock ?? 0),
                 tag,
                 imageUrl: buildImageUrl(req),
             },
         });
 
-        res.status(201).json(product);
+        res.status(201).json(productDto(product));
     } catch (err) {
         next(err);
     }
@@ -71,8 +80,8 @@ router.put("/:id", requireAuth, requireAdmin, upload.single("image"), async (req
             data: {
                 name,
                 description,
-                price: price !== undefined ? Number(price) : undefined,
-                stock: stock !== undefined ? Number(stock) : undefined,
+                priceCents: price !== undefined ? parsePriceCents(price) : undefined,
+                stock: stock !== undefined ? parseStock(stock) : undefined,
                 tag,
                 imageUrl,
             },
@@ -82,7 +91,7 @@ router.put("/:id", requireAuth, requireAdmin, upload.single("image"), async (req
             deleteLocalUpload(previous.imageUrl);
         }
 
-        res.json(product);
+        res.json(productDto(product));
     } catch (err) {
         next(err);
     }

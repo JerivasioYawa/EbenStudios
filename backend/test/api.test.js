@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { PrismaClient } from "@prisma/client";
+import { placeOrder } from "../src/lib/checkout.js";
 import { after, before, beforeEach, describe, it } from "node:test";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -45,7 +47,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
         customer = await prisma.user.create({ data: {
             name: "Test Customer", email: "customer@eben.test", password: hashedPassword,
         } });
-        product = await prisma.product.create({ data: { name: "Test Hoodie", price: 100, stock: 5 } });
+        product = await prisma.product.create({ data: { name: "Test Hoodie", priceCents: 10000, stock: 5 } });
         const token = (user) => jwt.sign(
             { sub: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: "5m" },
         );
@@ -160,7 +162,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
     it("creates orders using database prices and decrements inventory", async () => {
         await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
             .send({ productId: product.id, quantity: 2 }).expect(200);
-        const response = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({
+        const response = await request(app).post("/api/orders").set("Idempotency-Key", randomUUID()).auth(customerToken, { type: "bearer" }).send({
             items: [{ productId: product.id, quantity: 2, price: 1 }],
             total: 1, shippingAddress: "1 Test Street, Cape Town, 8001",
         }).expect(201);
@@ -176,29 +178,29 @@ describe("Eben Studios API", { concurrency: false }, () => {
 
     it("requires authentication and a saved non-empty cart to place an order", async (t) => {
         t.mock.method(console, "error", () => {});
-        await request(app).post("/api/orders").send({ items: [] }).expect(401);
+        await request(app).post("/api/orders").set("Idempotency-Key", randomUUID()).send({ items: [] }).expect(401);
         await request(app).get("/api/orders/mine").expect(401);
         for (const items of [undefined, [], [{ productId: product.id, quantity: 1 }]]) {
-            await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({ items }).expect(400);
+            await request(app).post("/api/orders").set("Idempotency-Key", randomUUID()).auth(customerToken, { type: "bearer" }).send({ items }).expect(400);
         }
     });
 
     it("rolls back stock changes when a later cart item cannot be fulfilled", async (t) => {
         t.mock.method(console, "error", () => {});
-        const second = await prisma.product.create({ data: { name: "Second Tee", price: 50, stock: 1 } });
+        const second = await prisma.product.create({ data: { name: "Second Tee", priceCents: 5000, stock: 1 } });
         for (const productId of [product.id, second.id]) {
             await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
                 .send({ productId, quantity: 1 }).expect(200);
         }
         await prisma.product.update({ where: { id: second.id }, data: { stock: 0 } });
-        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({}).expect(400);
+        await request(app).post("/api/orders").set("Idempotency-Key", randomUUID()).auth(customerToken, { type: "bearer" }).send({}).expect(409);
         assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
         assert.equal(await prisma.order.count(), 0);
         assert.equal(await prisma.cartItem.count(), 2);
     });
 
     it("keeps other customers' orders out of the customer's order history", async () => {
-        await prisma.order.create({ data: { userId: admin.id, total: 25 } });
+        await prisma.order.create({ data: { userId: admin.id, totalCents: 2500, customerName: admin.name, customerEmail: admin.email } });
         const mine = await request(app).get("/api/orders/mine").auth(customerToken, { type: "bearer" }).expect(200);
         assert.deepEqual(mine.body, []);
         const all = await request(app).get("/api/orders").auth(adminToken, { type: "bearer" }).expect(200);
@@ -207,7 +209,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
     });
 
     it("lets admins update order status and rejects invalid or missing orders", async () => {
-        const order = await prisma.order.create({ data: { userId: customer.id, total: 100 } });
+        const order = await prisma.order.create({ data: { userId: customer.id, totalCents: 10000, customerName: customer.name, customerEmail: customer.email } });
         const updated = await request(app).patch(`/api/orders/${order.id}/status`)
             .auth(adminToken, { type: "bearer" }).send({ status: "Shipped" }).expect(200);
         assert.equal(updated.body.status, "Shipped");
@@ -242,7 +244,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
                 .send({ productId: product.id, quantity: 1, userId: admin.id, price: 1 }).expect(200);
             assert.equal(response.body.items[0].id, product.id);
             assert.equal(response.body.items[0].quantity, addition);
-            assert.equal(response.body.items[0].price, product.price);
+            assert.equal(response.body.items[0].price, product.priceCents / 100);
         }
         const saved = await prisma.cart.findUnique({ where: { userId: customer.id }, include: { items: true } });
         assert.equal(saved.items[0].quantity, 2);
@@ -327,8 +329,8 @@ describe("Eben Studios API", { concurrency: false }, () => {
     it("revalidates current prices and ignores a forged checkout item list", async () => {
         await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
             .send({ productId: product.id, quantity: 2 }).expect(200);
-        await prisma.product.update({ where: { id: product.id }, data: { price: 125 } });
-        const placed = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({
+        await prisma.product.update({ where: { id: product.id }, data: { priceCents: 12500 } });
+        const placed = await request(app).post("/api/orders").set("Idempotency-Key", randomUUID()).auth(customerToken, { type: "bearer" }).send({
             items: [{ productId: 0, quantity: -10, price: 1 }], total: 1, userId: admin.id,
         }).expect(201);
         assert.equal(placed.body.total, 250);
@@ -343,7 +345,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
         await request(app).post("/api/cart/items").auth(adminToken, { type: "bearer" })
             .send({ productId: product.id, quantity: 1 }).expect(200);
         const other = await prisma.cart.findUnique({ where: { userId: admin.id } });
-        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+        await request(app).post("/api/orders").set("Idempotency-Key", randomUUID()).auth(customerToken, { type: "bearer" })
             .send({ cartId: other.id, userId: admin.id }).expect(400);
         assert.equal(await prisma.order.count(), 0);
         assert.equal(await prisma.cartItem.count(), 1);
@@ -351,13 +353,13 @@ describe("Eben Studios API", { concurrency: false }, () => {
 
     it("revalidates saved quantities and preserves the cart on failed checkout", async (t) => {
         t.mock.method(console, "error", () => {});
-        await prisma.cart.create({ data: {
+        await assert.rejects(prisma.cart.create({ data: {
             userId: customer.id, items: { create: { productId: product.id, quantity: -1 } },
-        } });
-        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({}).expect(400);
+        } }));
+        await request(app).post("/api/orders").set("Idempotency-Key", randomUUID()).auth(customerToken, { type: "bearer" }).send({}).expect(400);
         assert.equal(await prisma.order.count(), 0);
         assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
-        assert.equal(await prisma.cartItem.count(), 1);
+        assert.equal(await prisma.cartItem.count(), 0);
     });
 
     it("requires authentication for every likes endpoint and rejects expired sessions", async () => {
@@ -373,7 +375,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
         const empty = await request(app).get("/api/likes").auth(customerToken, { type: "bearer" }).expect(200);
         assert.deepEqual(empty.body, []);
         await request(app).put(`/api/likes/${product.id}`).auth(customerToken, { type: "bearer" }).expect(200);
-        await prisma.product.update({ where: { id: product.id }, data: { price: 125 } });
+        await prisma.product.update({ where: { id: product.id }, data: { priceCents: 12500 } });
         const response = await request(app).get("/api/likes").auth(customerToken, { type: "bearer" }).expect(200);
         assert.equal(response.body.length, 1);
         assert.equal(response.body[0].id, product.id);
@@ -429,7 +431,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
     it("does not change cart contents, orders, or stock when liking or unliking", async () => {
         await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
             .send({ productId: product.id, quantity: 2 }).expect(200);
-        const unavailable = await prisma.product.create({ data: { name: "Unavailable Tee", price: 50, stock: 0 } });
+        const unavailable = await prisma.product.create({ data: { name: "Unavailable Tee", priceCents: 5000, stock: 0 } });
         const snapshot = async () => ({
             products: await prisma.product.findMany({ orderBy: { id: "asc" } }),
             carts: await prisma.cart.findMany({ orderBy: { id: "asc" } }),
@@ -453,4 +455,127 @@ describe("Eben Studios API", { concurrency: false }, () => {
         await prisma.product.delete({ where: { id: product.id } });
         assert.equal(await prisma.productLike.count(), 0);
     });
+
+    it("calculates R0.29 times three as exactly 87 cents", async () => {
+        await request(app).put("/api/products/" + product.id).auth(adminToken, { type: "bearer" }).send({ price: "0.29" }).expect(200);
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 3 }).expect(200);
+        const response = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", randomUUID()).send({ shippingAddress: "Exact Money Street" }).expect(201);
+        assert.equal(response.body.totalCents, 87);
+        assert.equal(response.body.total, 0.87);
+        assert.equal(response.body.items[0].unitPriceCents, 29);
+        assert.equal(response.body.items[0].lineTotalCents, 87);
+        assert.equal(response.body.adjustmentCents, 0);
+    });
+
+    it("rejects invalid product amounts and stock before changing stored values", async (t) => {
+        t.mock.method(console, "error", () => {});
+        for (const price of ["-1", "0.001", "1e3", "NaN", "21474836.48"]) {
+            await request(app).put("/api/products/" + product.id).auth(adminToken, { type: "bearer" }).send({ price }).expect(400);
+        }
+        for (const stock of [-1, 1.5]) {
+            await request(app).put("/api/products/" + product.id).auth(adminToken, { type: "bearer" }).send({ stock }).expect(400);
+        }
+        const stored = await prisma.product.findUnique({ where: { id: product.id } });
+        assert.equal(stored.priceCents, 10000);
+        assert.equal(stored.stock, 5);
+    });
+
+    it("requires a valid checkout idempotency key before writing an order", async (t) => {
+        t.mock.method(console, "error", () => {});
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).send({}).expect(400);
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", "not-a-uuid").send({}).expect(400);
+        assert.equal(await prisma.order.count(), 0);
+    });
+
+    it("does not oversell the last unit under simultaneous HTTP purchases", async (t) => {
+        t.mock.method(console, "error", () => {});
+        await prisma.product.update({ where: { id: product.id }, data: { stock: 1 } });
+        for (const token of [customerToken, adminToken]) {
+            await request(app).post("/api/cart/items").auth(token, { type: "bearer" }).send({ productId: product.id, quantity: 1 }).expect(200);
+        }
+        const results = await Promise.all([customerToken, adminToken].map(token => request(app).post("/api/orders")
+            .auth(token, { type: "bearer" }).set("Idempotency-Key", randomUUID()).send({})));
+        assert.deepEqual(results.map(result => result.status).sort(), [201, 409]);
+        assert.equal(await prisma.order.count(), 1);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 0);
+        assert.equal(await prisma.cartItem.count(), 1);
+    });
+
+    it("cannot oversell across independent database clients", async () => {
+        await prisma.product.update({ where: { id: product.id }, data: { stock: 1 } });
+        for (const token of [customerToken, adminToken]) {
+            await request(app).post("/api/cart/items").auth(token, { type: "bearer" }).send({ productId: product.id, quantity: 1 }).expect(200);
+        }
+        const clients = [new PrismaClient({ datasources: { db: { url: database.url } } }), new PrismaClient({ datasources: { db: { url: database.url } } })];
+        try {
+            const results = await Promise.allSettled([customer, admin].map((user, index) =>
+                placeOrder(clients[index], { sub: user.id, name: user.name, email: user.email }, randomUUID(), null)));
+            assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+            assert.equal(results.find(result => result.status === "rejected").reason.status, 409);
+            assert.equal(await prisma.order.count(), 1);
+            assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 0);
+        } finally { await Promise.all(clients.map(client => client.$disconnect())); }
+    });
+
+    it("creates one order for concurrent and later retries with the same checkout key", async () => {
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" }).send({ productId: product.id, quantity: 2 }).expect(200);
+        const key = randomUUID();
+        const results = await Promise.all(Array.from({ length: 4 }, () => request(app).post("/api/orders")
+            .auth(customerToken, { type: "bearer" }).set("Idempotency-Key", key).send({ shippingAddress: "Retry Street" })));
+        assert.equal(results.filter(result => result.status === 201).length, 1);
+        assert.equal(results.filter(result => result.status === 200).length, 3);
+        assert.equal(new Set(results.map(result => result.body.id)).size, 1);
+        const retry = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", key).send({ shippingAddress: "Retry Street" }).expect(200);
+        assert.equal(retry.headers["idempotency-replayed"], "true");
+        assert.equal(retry.body.id, results[0].body.id);
+        assert.equal(await prisma.order.count(), 1);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 3);
+    });
+
+    it("rejects changed retry details and does not consume a newly refilled cart on replay", async (t) => {
+        t.mock.method(console, "error", () => {});
+        const add = () => request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 1 }).expect(200);
+        await add();
+        const key = randomUUID();
+        const first = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", key).send({ shippingAddress: "Original Street" }).expect(201);
+        await add();
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", key).send({ shippingAddress: "Different Street" }).expect(409);
+        const replay = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", key).send({ shippingAddress: "Original Street" }).expect(200);
+        assert.equal(replay.body.id, first.body.id);
+        assert.equal(await prisma.order.count(), 1);
+        assert.equal(await prisma.cartItem.count(), 1);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 4);
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", randomUUID()).send({ shippingAddress: "Original Street" }).expect(201);
+        assert.equal(await prisma.order.count(), 2);
+    });
+
+    it("keeps historical customer and product details after editing or deleting the product", async () => {
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 1 }).expect(200);
+        const placed = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
+            .set("Idempotency-Key", randomUUID()).send({}).expect(201);
+        await prisma.product.update({ where: { id: product.id }, data: {
+            name: "Renamed Product", priceCents: 29, description: "New description", imageUrl: "https://example.test/new.png",
+        } });
+        await prisma.user.update({ where: { id: customer.id }, data: { name: "Changed Customer", email: "changed@eben.test" } });
+        const edited = await request(app).get("/api/orders/mine").auth(customerToken, { type: "bearer" }).expect(200);
+        assert.deepEqual(edited.body[0], placed.body);
+        await request(app).delete("/api/products/" + product.id).auth(adminToken, { type: "bearer" }).expect(204);
+        const deleted = await request(app).get("/api/orders/mine").auth(customerToken, { type: "bearer" }).expect(200);
+        assert.equal(deleted.body[0].items[0].productId, null);
+        assert.equal(deleted.body[0].items[0].productName, "Test Hoodie");
+        assert.equal(deleted.body[0].items[0].unitPriceCents, 10000);
+        assert.equal(deleted.body[0].customerName, "Test Customer");
+        assert.equal(deleted.body[0].totalCents, 10000);
+    });
+
 });

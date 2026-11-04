@@ -33,6 +33,12 @@ coverage includes ownership, positive integer quantities, stock availability,
 expired sessions, and checkout from saved cart contents using current prices.
 Likes coverage includes authenticated ownership, repeated and concurrent requests,
 unique pairs, deleted products/users, and unchanged cart/stock snapshots.
+Order integrity coverage adds integer-cent calculations, full checkout rollback,
+last-unit contention through HTTP and independent Prisma clients, account-scoped
+retry keys, immutable customer/product snapshots and historical product deletion.
+Migration tests build the old schema with historical orders/carts/likes, verify
+conversion and sequence preservation, and prove invalid legacy data aborts without
+losing business records. They use Node's built-in node:sqlite DatabaseSync API.
 Each run applies the committed migrations to its own temporary SQLite database and removes it
 afterward. Uploads are temporary too. The app module does not open a listener;
 Supertest manages its own temporary server.
@@ -52,6 +58,8 @@ login return URLs, account changes, and central expired-session handling.
 Likes tests also cover local guest persistence, keyboard hearts outside links,
 storage errors, one merge job during Strict Mode replay, acknowledged merge retry,
 and old-account response suppression.
+Money and checkout tests cover exact two-decimal totals, large aggregate values,
+persisted retry keys, failed responses, cart changes, account isolation and request headers.
 DOM cleanup and storage resets run after each test. Only tests under `src/`
 are collected by Vitest, so Playwright specs are kept separate.
 
@@ -83,9 +91,13 @@ logout clearing, and a real expired-session cart API failure followed by login.
 Likes journeys cover guest refresh persistence, mouse/keyboard controls, merging
 guest preferences exactly once after login, account likes in an independent
 browser context, and unchanged cart/stock data.
-After Phase 4, the expected totals are 33 API tests, 43 frontend tests, and 11
-Chromium journeys. The [Phase 4 record](docs/phases/phase-04-product-likes/README.md)
-contains the likes API contract, migration steps, and detailed checkpoint results.
+The order-integrity journey submits three R0.29 items, lets the real API commit,
+discards the receipt, then verifies that retrying returns the same R0.87 order.
+It checks stock and cart state and verifies history after product edits/deletion.
+After Phase 5, the expected totals are 45 backend tests (41 API and 4 migration),
+51 frontend tests, and 12 Chromium journeys. The
+[Phase 5 record](docs/phases/phase-05-order-integrity/README.md) contains the checkout
+contract, conversion policy, disposable-copy verifier and detailed checkpoint results.
 
 Set `E2E_PORT` or `E2E_API_PORT` to use different local ports:
 

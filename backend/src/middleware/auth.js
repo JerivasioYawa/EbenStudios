@@ -22,10 +22,10 @@ export async function requireAuth(req, res, next) {
 
     try {
         const user = await prisma.user.findUnique({
-            where: { id: session.sub }, select: { id: true, email: true, role: true },
+            where: { id: session.sub }, select: { id: true, name: true, email: true, role: true },
         });
         if (!user) return res.status(401).json({ message: "Session is no longer valid" });
-        req.user = { sub: user.id, email: user.email, role: user.role };
+        req.user = { sub: user.id, name: user.name, email: user.email, role: user.role };
         next();
     } catch (error) {
         next(error);

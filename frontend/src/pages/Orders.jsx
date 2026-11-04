@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { getMyOrders } from "../service/orderService";
+import { formatMoney } from "../lib/money";
 
 const statusStyles = {
     Paid: "bg-green-100 text-green-700",
@@ -90,15 +91,16 @@ export default function Orders() {
                             <div className="flex flex-col gap-2 mb-4">
                                 {order.items.map((item) => (
                                     <div key={item.id} className="flex items-center justify-between text-sm text-neutral-600">
-                                        <span>{item.product.name} × {item.quantity}</span>
-                                        <span>R {Number(item.price * item.quantity).toLocaleString()}</span>
+                                        <span>{item.productName} × {item.quantity}</span>
+                                        <span>{formatMoney(item.lineTotalCents)}</span>
                                     </div>
                                 ))}
                             </div>
 
+                            {order.adjustmentCents !== 0 && <div className="flex justify-between mb-4 text-sm"><span>Adjustment</span><span>{formatMoney(order.adjustmentCents)}</span></div>}
                             <div className="flex items-center justify-between border-t border-black/5 pt-4">
                                 <span className="text-neutral-500">Total</span>
-                                <span className="font-bold">R {Number(order.total).toLocaleString()}</span>
+                                <span className="font-bold">{formatMoney(order.totalCents)}</span>
                             </div>
                         </div>
                     ))}

@@ -12,7 +12,7 @@ vi.mock("../service/cartService", () => ({
     deleteCartItem: vi.fn(), deleteCart: vi.fn(),
 }));
 
-const item = { id: 1, name: "Test Tee", price: 100, quantity: 2 };
+const item = { id: 1, name: "Test Tee", priceCents: 10000, quantity: 2 };
 
 function renderCart() {
     return render(
@@ -45,14 +45,14 @@ describe("authenticated shopping cart", () => {
         const user = userEvent.setup();
         const view = renderCart();
         await user.click(await screen.findByRole("button", { name: /increase quantity/i }));
-        await waitFor(() => expect(screen.getAllByText("R 300")).toHaveLength(2));
+        await waitFor(() => expect(screen.getAllByText("R 300.00")).toHaveLength(2));
         expect(cartService.setCartQuantity).toHaveBeenCalledWith(1, 3, expect.objectContaining({ sessionToken: "test-session" }));
 
         view.unmount();
         renderCart();
-        await waitFor(() => expect(screen.getAllByText("R 300")).toHaveLength(2));
+        await waitFor(() => expect(screen.getAllByText("R 300.00")).toHaveLength(2));
         await user.click(screen.getByRole("button", { name: /decrease quantity/i }));
-        await waitFor(() => expect(screen.getAllByText("R 200")).toHaveLength(2));
+        await waitFor(() => expect(screen.getAllByText("R 200.00")).toHaveLength(2));
         expect(screen.getByRole("link", { name: /proceed to checkout/i })).toHaveAttribute("href", "/checkout");
     });
 

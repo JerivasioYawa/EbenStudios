@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getOrders, updateOrderStatus } from "../../service/orderService";
+import { formatMoney } from "../../lib/money";
 
 const ORDER_STATUSES = ["Pending", "Paid", "Shipped", "Delivered", "Cancelled"];
 
@@ -79,9 +80,9 @@ export default function Orders() {
                         {!loading && orders.map((order) => (
                             <tr key={order.id} className="border-b border-black/5 last:border-0">
                                 <td className="px-6 py-4 font-semibold">#EB-{order.id}</td>
-                                <td className="px-6 py-4 text-neutral-600">{order.user?.name}</td>
+                                <td className="px-6 py-4 text-neutral-600">{order.customerName}</td>
                                 <td className="px-6 py-4 text-neutral-600">
-                                    R {Number(order.total).toLocaleString()}
+                                    {formatMoney(order.totalCents)}
                                 </td>
                                 <td className="px-6 py-4">
                                     <select

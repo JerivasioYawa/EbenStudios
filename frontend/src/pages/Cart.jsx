@@ -3,9 +3,10 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "../hooks/useCart";
 import { getProductImage } from "../lib/productImage";
 import Button from "../components/ui/Button";
+import { cartLineCents, formatMoney } from "../lib/money";
 
 export default function Cart() {
-    const { items, updateQuantity, removeFromCart, subtotal, loading, pending, error } = useCart();
+    const { items, updateQuantity, removeFromCart, subtotalCents, loading, pending, error } = useCart();
 
     if (loading) return <p role="status" className="p-6">Loading your cart...</p>;
 
@@ -58,7 +59,7 @@ export default function Cart() {
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold truncate">{item.name}</h3>
                                 <p className="text-neutral-500 text-sm">
-                                    R {Number(item.price).toLocaleString()}
+                                    {formatMoney(item.priceCents)}
                                 </p>
                             </div>
 
@@ -87,7 +88,7 @@ export default function Cart() {
                             </div>
 
                             <p className="w-24 text-right font-semibold">
-                                R {Number(item.price * item.quantity).toLocaleString()}
+                                {formatMoney(cartLineCents(item))}
                             </p>
 
                             <button
@@ -108,7 +109,7 @@ export default function Cart() {
                     <div className="flex items-center justify-between mb-6 text-neutral-600">
                         <span>Subtotal</span>
                         <span className="font-semibold text-black">
-                            R {Number(subtotal).toLocaleString()}
+                            {formatMoney(subtotalCents)}
                         </span>
                     </div>
 

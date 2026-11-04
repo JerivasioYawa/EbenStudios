@@ -7,6 +7,7 @@ import {
     deleteProduct,
 } from "../../service/productService";
 import { getProductImage } from "../../lib/productImage";
+import { formatMoney } from "../../lib/money";
 
 const emptyForm = { name: "", description: "", price: "", stock: "", tag: "" };
 
@@ -279,7 +280,7 @@ export default function Products() {
                                 </td>
                                 <td className="px-6 py-4 font-semibold">{product.name}</td>
                                 <td className="px-6 py-4 text-neutral-600">
-                                    R {Number(product.price).toLocaleString()}
+                                    {formatMoney(product.priceCents)}
                                 </td>
                                 <td className="px-6 py-4 text-neutral-600">{product.stock}</td>
                                 <td className="px-6 py-4">

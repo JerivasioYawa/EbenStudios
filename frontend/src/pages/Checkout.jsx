@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../hooks/useCart";
 import Button from "../components/ui/Button";
+import { cartLineCents, formatMoney } from "../lib/money";
 
 export default function Checkout() {
-    const { items, subtotal, checkout, loading, pending, error: cartError } = useCart();
+    const { items, subtotalCents, checkout, loading, pending, pendingCheckout, error: cartError } = useCart();
     const navigate = useNavigate();
 
     const [address, setAddress] = useState("");
@@ -23,6 +24,7 @@ export default function Checkout() {
                 </p>
 
                 {cartError && <p role="alert" className="mb-4 text-red-600">{cartError}</p>}
+                {pendingCheckout && <p role="alert" className="mb-4">A previous checkout may have completed. Check your orders before placing another order.</p>}
                 <h1 className="text-4xl md:text-5xl font-black uppercase leading-none mb-6">
                     Your Cart Is Empty
                 </h1>
@@ -30,6 +32,7 @@ export default function Checkout() {
                 <Button variant="outline" to="/shop">
                     Continue Shopping
                 </Button>
+                <Link to="/orders" className="block mt-6 font-semibold underline">View Your Orders</Link>
             </section>
         );
     }
@@ -43,7 +46,7 @@ export default function Checkout() {
             const order = await checkout(`${address}, ${city}, ${postalCode}`);
             navigate("/orders", { state: { justOrderedId: order.id } });
         } catch (err) {
-            setError(err.response?.data?.message || "Something went wrong. Please try again.");
+            setError(err.response?.data?.message || err.message || "Something went wrong. Please try again.");
         } finally {
             setSubmitting(false);
         }
@@ -101,7 +104,7 @@ export default function Checkout() {
                         disabled={submitting || pending}
                         className="bg-black text-white rounded-full py-4 font-semibold hover:bg-neutral-800 transition disabled:opacity-50 mt-2"
                     >
-                        {submitting ? "Placing Order..." : `Place Order — R ${Number(subtotal).toLocaleString()}`}
+                        {submitting ? "Placing Order..." : `Place Order — ${formatMoney(subtotalCents)}`}
                     </button>
                 </form>
 
@@ -115,7 +118,7 @@ export default function Checkout() {
                                     {item.name} × {item.quantity}
                                 </span>
                                 <span className="font-semibold">
-                                    R {Number(item.price * item.quantity).toLocaleString()}
+                                    {formatMoney(cartLineCents(item))}
                                 </span>
                             </div>
                         ))}
@@ -124,7 +127,7 @@ export default function Checkout() {
                     <div className="flex items-center justify-between border-t border-black/5 pt-4 text-neutral-600">
                         <span>Subtotal</span>
                         <span className="font-semibold text-black">
-                            R {Number(subtotal).toLocaleString()}
+                            {formatMoney(subtotalCents)}
                         </span>
                     </div>
                 </div>

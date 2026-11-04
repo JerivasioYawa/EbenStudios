@@ -10,7 +10,7 @@ import ProductCard from "./ProductCard";
 function renderCard(loading = false) {
     return render(<MemoryRouter initialEntries={["/shop"]}>
         <AuthContext.Provider value={{ user: null, loading }}><LikesProvider><Routes>
-            <Route path="/shop" element={<><h1>Shop</h1><ProductCard product={{ id: 1, name: "Test Tee", price: 100 }} /></>} />
+            <Route path="/shop" element={<><h1>Shop</h1><ProductCard product={{ id: 1, name: "Test Tee", priceCents: 10000 }} /></>} />
             <Route path="/products/1" element={<h1>Product details</h1>} />
         </Routes></LikesProvider></AuthContext.Provider>
     </MemoryRouter>);

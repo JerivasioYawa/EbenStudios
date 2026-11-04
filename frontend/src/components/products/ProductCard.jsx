@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { getProductImage } from "../../lib/productImage";
 import LikeButton from "./LikeButton";
+import { formatMoney } from "../../lib/money";
 
 export default function ProductCard({ product }) {
     return (
@@ -22,7 +23,7 @@ export default function ProductCard({ product }) {
             </div>
 
             <h3 className="font-semibold text-lg mb-1">{product.name}</h3>
-            <p className="text-neutral-500">R {Number(product.price).toLocaleString()}</p>
+            <p className="text-neutral-500">{formatMoney(product.priceCents)}</p>
         </Link>
         <LikeButton product={product} className="absolute right-4 top-4 z-10" />
         </article>

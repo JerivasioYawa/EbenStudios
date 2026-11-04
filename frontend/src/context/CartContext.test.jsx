@@ -5,6 +5,7 @@ import { CartProvider } from "./CartContext";
 import { useCart } from "../hooks/useCart";
 import * as cartService from "../service/cartService";
 import { createOrder } from "../service/orderService";
+import { readCheckoutAttempt } from "../service/checkoutAttempt";
 
 vi.mock("../service/cartService", () => ({
     getCart: vi.fn(), addCartItem: vi.fn(), setCartQuantity: vi.fn(), deleteCartItem: vi.fn(), deleteCart: vi.fn(),
@@ -41,14 +42,14 @@ it.each([
 it("clears active state on logout, loads the next account, and ignores a previous account's late response", async () => {
     let resolveFirst;
     cartService.getCart.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
-        .mockResolvedValueOnce({ items: [{ id: 2, name: "B Tee", price: 20, quantity: 1 }] })
-        .mockResolvedValueOnce({ items: [{ id: 1, name: "A Hoodie", price: 50, quantity: 2 }] });
+        .mockResolvedValueOnce({ items: [{ id: 2, name: "B Tee", priceCents: 2000, quantity: 1 }] })
+        .mockResolvedValueOnce({ items: [{ id: 1, name: "A Hoodie", priceCents: 5000, quantity: 2 }] });
     const view = harness({ user: { id: 1 }, loading: false });
     await waitFor(() => expect(cartService.getCart).toHaveBeenCalledTimes(1));
     localStorage.setItem("eben_auth_token", "session-b");
     view.setAuth({ user: { id: 2 }, loading: false });
     await waitFor(() => expect(view.result.current.items[0]?.name).toBe("B Tee"));
-    await act(async () => { resolveFirst({ items: [{ id: 1, name: "A Hoodie", price: 50, quantity: 2 }] }); });
+    await act(async () => { resolveFirst({ items: [{ id: 1, name: "A Hoodie", priceCents: 5000, quantity: 2 }] }); });
     expect(view.result.current.items[0].name).toBe("B Tee");
     localStorage.removeItem("eben_auth_token");
     view.setAuth({ user: null, loading: false });
@@ -70,7 +71,41 @@ it("ignores an in-flight mutation when the customer switches accounts", async ()
     localStorage.setItem("eben_auth_token", "session-b");
     view.setAuth({ user: { id: 2 }, loading: false });
     await waitFor(() => expect(view.result.current.loading).toBe(false));
-    await act(async () => { resolveMutation({ items: [{ id: 1, price: 50, quantity: 1 }] }); });
+    await act(async () => { resolveMutation({ items: [{ id: 1, priceCents: 5000, quantity: 1 }] }); });
     expect((await outcome).message).toMatch(/account changed/i);
     expect(view.result.current.items).toEqual([]);
+});
+
+it("keeps the cart and checkout key after a lost response and clears them only after acknowledgement", async () => {
+    const item = { id: 1, priceCents: 29, quantity: 3 };
+    cartService.getCart.mockResolvedValue({ items: [item] });
+    createOrder.mockRejectedValueOnce(new Error("Connection lost"))
+        .mockResolvedValueOnce({ id: 7, totalCents: 87 });
+    const { result } = harness({ user: { id: 1 }, loading: false });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.subtotalCents).toBe(87n);
+    await act(async () => { await expect(result.current.checkout("Test Road")).rejects.toThrow("Connection lost"); });
+    expect(result.current.items).toEqual([item]);
+    expect(result.current.pendingCheckout).toBe(true);
+    const first = createOrder.mock.calls[0][0];
+    expect(readCheckoutAttempt(1).key).toBe(first.idempotencyKey);
+    await act(async () => { expect(await result.current.checkout("Test Road")).toEqual({ id: 7, totalCents: 87 }); });
+    expect(createOrder.mock.calls[1][0]).toEqual(first);
+    expect(result.current.items).toEqual([]);
+    expect(readCheckoutAttempt(1)).toBeNull();
+});
+
+it("starts a new checkout intent after a successful cart change", async () => {
+    const item = { id: 1, priceCents: 29, quantity: 3 };
+    cartService.getCart.mockResolvedValue({ items: [item] });
+    cartService.setCartQuantity.mockResolvedValue({ items: [{ ...item, quantity: 2 }] });
+    createOrder.mockRejectedValue(new Error("offline"));
+    const { result } = harness({ user: { id: 1 }, loading: false });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => { await expect(result.current.checkout("Test Road")).rejects.toThrow(); });
+    const first = readCheckoutAttempt(1).key;
+    await act(async () => { await result.current.updateQuantity(1, 2); });
+    expect(readCheckoutAttempt(1)).toBeNull();
+    await act(async () => { await expect(result.current.checkout("Test Road")).rejects.toThrow(); });
+    expect(readCheckoutAttempt(1).key).not.toBe(first);
 });

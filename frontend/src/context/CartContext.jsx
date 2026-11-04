@@ -4,6 +4,8 @@ import { useAuth } from "../hooks/useAuth";
 import { getSessionToken } from "../service/session";
 import { getCart, addCartItem, setCartQuantity, deleteCartItem, deleteCart } from "../service/cartService";
 import { createOrder } from "../service/orderService";
+import { cartSubtotalCents } from "../lib/money";
+import { checkoutAttempt, completeCheckoutAttempt, discardCheckoutAttempt, readCheckoutAttempt } from "../service/checkoutAttempt";
 
 export function CartProvider({ children }) {
     const { user, loading: authLoading, sessionId = 0 } = useAuth();
@@ -51,7 +53,7 @@ export function CartProvider({ children }) {
         };
     }, [enabled, ownerKey]);
 
-    async function mutate(action) {
+    async function mutate(action, changesCart = false) {
         const token = getSessionToken();
         if (!user || authLoading || !token) throw new Error("Please log in to change your cart.");
         if (cart.loading || inFlight.current?.ownerKey === ownerKey) throw new Error("Your cart is updating. Please try again.");
@@ -63,6 +65,7 @@ export function CartProvider({ children }) {
             if (!active.current || currentOwner.current !== ownerKey || token !== getSessionToken()) {
                 throw new Error("Your account changed. Please try again.");
             }
+            if (changesCart) discardCheckoutAttempt(user.id);
             setCart((current) => current.ownerKey === ownerKey ? { ...current, items: saved.items } : current);
             return saved;
         } catch (failure) {
@@ -80,30 +83,34 @@ export function CartProvider({ children }) {
     }
 
     function addToCart(product, quantity = 1) {
-        return mutate((config) => addCartItem(product.id, quantity, config));
+        return mutate((config) => addCartItem(product.id, quantity, config), true);
     }
     function updateQuantity(id, quantity) {
-        return mutate((config) => quantity === 0 ? deleteCartItem(id, config) : setCartQuantity(id, quantity, config));
+        return mutate((config) => quantity === 0 ? deleteCartItem(id, config) : setCartQuantity(id, quantity, config), true);
     }
     function removeFromCart(id) {
-        return mutate((config) => deleteCartItem(id, config));
+        return mutate((config) => deleteCartItem(id, config), true);
     }
     function clearCart() {
-        return mutate((config) => deleteCart(config));
+        return mutate((config) => deleteCart(config), true);
     }
     async function checkout(shippingAddress) {
-        const result = await mutate(async (config) => ({
-            items: [], order: await createOrder({ shippingAddress }, config),
-        }));
+        const result = await mutate(async (config) => {
+            const attempt = checkoutAttempt(user.id, cart.items, shippingAddress);
+            const order = await createOrder({ shippingAddress, idempotencyKey: attempt.key }, config);
+            completeCheckoutAttempt(user.id, attempt.key);
+            return { items: [], order };
+        });
         return result.order;
     }
 
     const { items, loading, pending, error } = cart;
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
-    const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const subtotalCents = cartSubtotalCents(items);
+    const pendingCheckout = enabled && Boolean(readCheckoutAttempt(user.id));
     return (
         <CartContext.Provider value={{ items, loading, pending, error, addToCart, updateQuantity,
-            removeFromCart, clearCart, checkout, itemCount, subtotal }}>
+            removeFromCart, clearCart, checkout, itemCount, subtotalCents, pendingCheckout }}>
             {children}
         </CartContext.Provider>
     );
