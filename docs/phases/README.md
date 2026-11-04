@@ -11,6 +11,7 @@ when resuming work or reproducing a completed phase.
 | 01 | Local environment, database migrations, and protected seeding | Completed | 2026-11-04 | [Rerun guide](phase-01-local-setup/README.md), [verification](phase-01-local-setup/verification.md) |
 | 02 | Test setup, database isolation, and initial frontend checks | Completed | 2026-11-04 | [Rerun guide](phase-02-test-setup/README.md), [verification](phase-02-test-setup/verification.md) |
 | 03 | Authenticated persistent carts and session handling | Completed | 2026-11-04 | [Rerun guide](phase-03-authenticated-carts/README.md), [verification](phase-03-authenticated-carts/verification.md) |
+| 04 | Guest and account product likes | Completed | 2026-11-04 | [Rerun guide](phase-04-product-likes/README.md), [verification](phase-04-product-likes/verification.md) |
 
 Phase 01 is a retrospective record of the local setup completed before the
 explicit Phase 2 checkpoint. Later phases will be added as their scope is agreed.
@@ -38,6 +39,7 @@ Each completed phase has its own Git branch and implementation commit:
 | 01 | [phase/01-local-setup](https://github.com/JerivasioYawa/EbenStudios/tree/phase/01-local-setup) | Local configuration safeguards, protected seeding, and Phase 1 records |
 | 02 | [phase/02-test-setup](https://github.com/JerivasioYawa/EbenStudios/tree/phase/02-test-setup) | Phase 1 plus the original API, component, and browser test setup |
 | 03 | [phase/03-authenticated-carts](https://github.com/JerivasioYawa/EbenStudios/tree/phase/03-authenticated-carts) | Phases 1 and 2 plus authenticated persistent carts and session handling |
+| 04 | [phase/04-product-likes](https://github.com/JerivasioYawa/EbenStudios/tree/phase/04-product-likes) | Earlier phases plus guest/account likes, login merging, and the liked-products page |
 
 These branches are stacked in order. An earlier phase branch preserves the
 implementation before later phase changes. The initial uncommitted work was
@@ -48,7 +50,7 @@ To open a particular phase after its branch has been fetched:
 
 ```powershell
 git fetch origin
-git switch phase/03-authenticated-carts
+git switch phase/04-product-likes
 ```
 
 Use that branch's rerun guide and lockfiles. Future phases get a new
@@ -75,7 +77,7 @@ Writing these documents did not rerun the application checks or copy private dat
 1. Copy [_template](./_template/README.md) into a descriptive, numbered directory:
 
    ```powershell
-   Copy-Item -LiteralPath docs/phases/_template -Destination docs/phases/phase-04-short-name -Recurse
+   Copy-Item -LiteralPath docs/phases/_template -Destination docs/phases/phase-05-short-name -Recurse
    ```
 
 2. Fill in the phase title, requirements, file references, prerequisites, rerun

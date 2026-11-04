@@ -31,6 +31,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
 
     beforeEach(async () => {
         await prisma.$transaction([
+            prisma.productLike.deleteMany(),
             prisma.cartItem.deleteMany(),
             prisma.cart.deleteMany(),
             prisma.orderItem.deleteMany(),
@@ -357,5 +358,99 @@ describe("Eben Studios API", { concurrency: false }, () => {
         assert.equal(await prisma.order.count(), 0);
         assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
         assert.equal(await prisma.cartItem.count(), 1);
+    });
+
+    it("requires authentication for every likes endpoint and rejects expired sessions", async () => {
+        await request(app).get("/api/likes").expect(401);
+        await request(app).put(`/api/likes/${product.id}`).expect(401);
+        await request(app).delete(`/api/likes/${product.id}`).expect(401);
+        const expired = jwt.sign({ sub: customer.id }, process.env.JWT_SECRET, { expiresIn: -1 });
+        await request(app).put(`/api/likes/${product.id}`).auth(expired, { type: "bearer" }).expect(401);
+        assert.equal(await prisma.productLike.count(), 0);
+    });
+
+    it("lists an empty account without writes and returns current liked product details", async () => {
+        const empty = await request(app).get("/api/likes").auth(customerToken, { type: "bearer" }).expect(200);
+        assert.deepEqual(empty.body, []);
+        await request(app).put(`/api/likes/${product.id}`).auth(customerToken, { type: "bearer" }).expect(200);
+        await prisma.product.update({ where: { id: product.id }, data: { price: 125 } });
+        const response = await request(app).get("/api/likes").auth(customerToken, { type: "bearer" }).expect(200);
+        assert.equal(response.body.length, 1);
+        assert.equal(response.body[0].id, product.id);
+        assert.equal(response.body[0].price, 125);
+        assert.equal(response.body[0].userId, undefined);
+    });
+
+    it("makes repeated like and unlike requests idempotent", async () => {
+        for (let repeat = 0; repeat < 3; repeat++) {
+            const response = await request(app).put(`/api/likes/${product.id}`)
+                .auth(customerToken, { type: "bearer" }).send({ userId: admin.id, price: 1 }).expect(200);
+            assert.equal(response.body.id, product.id);
+        }
+        assert.equal(await prisma.productLike.count(), 1);
+        assert.equal((await prisma.productLike.findFirst()).userId, customer.id);
+        for (let repeat = 0; repeat < 3; repeat++) {
+            await request(app).delete(`/api/likes/${product.id}`).auth(customerToken, { type: "bearer" }).expect(204);
+        }
+        assert.equal(await prisma.productLike.count(), 0);
+    });
+
+    it("does not create duplicates under concurrent like requests", async () => {
+        const responses = await Promise.all(Array.from({ length: 8 }, () =>
+            request(app).put(`/api/likes/${product.id}`).auth(customerToken, { type: "bearer" })));
+        assert.deepEqual(responses.map(response => response.status), Array(8).fill(200));
+        assert.equal(await prisma.productLike.count({ where: { userId: customer.id, productId: product.id } }), 1);
+    });
+
+    it("scopes likes to the verified account despite supplied foreign account IDs", async () => {
+        for (const token of [customerToken, adminToken]) {
+            await request(app).put(`/api/likes/${product.id}`).auth(token, { type: "bearer" }).expect(200);
+        }
+        assert.equal(await prisma.productLike.count(), 2);
+        await request(app).delete(`/api/likes/${product.id}?userId=${admin.id}`)
+            .auth(customerToken, { type: "bearer" }).expect(204);
+        const own = await request(app).get(`/api/likes?userId=${admin.id}`).auth(customerToken, { type: "bearer" }).expect(200);
+        assert.deepEqual(own.body, []);
+        const other = await request(app).get("/api/likes").auth(adminToken, { type: "bearer" }).expect(200);
+        assert.deepEqual(other.body.map(item => item.id), [product.id]);
+        assert.equal(await prisma.productLike.count(), 1);
+    });
+
+    it("validates like product IDs and handles missing products without creating rows", async () => {
+        for (const id of ["0", "-1", "1.5", "abc", "2147483648"]) {
+            await request(app).put(`/api/likes/${id}`).auth(customerToken, { type: "bearer" }).expect(400);
+            await request(app).delete(`/api/likes/${id}`).auth(customerToken, { type: "bearer" }).expect(400);
+        }
+        await request(app).put("/api/likes/999999").auth(customerToken, { type: "bearer" }).expect(404);
+        await request(app).delete("/api/likes/999999").auth(customerToken, { type: "bearer" }).expect(204);
+        assert.equal(await prisma.productLike.count(), 0);
+    });
+
+    it("does not change cart contents, orders, or stock when liking or unliking", async () => {
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
+            .send({ productId: product.id, quantity: 2 }).expect(200);
+        const unavailable = await prisma.product.create({ data: { name: "Unavailable Tee", price: 50, stock: 0 } });
+        const snapshot = async () => ({
+            products: await prisma.product.findMany({ orderBy: { id: "asc" } }),
+            carts: await prisma.cart.findMany({ orderBy: { id: "asc" } }),
+            items: await prisma.cartItem.findMany({ orderBy: { id: "asc" } }),
+            orders: await prisma.order.findMany(),
+        });
+        const before = await snapshot();
+        for (const productId of [product.id, unavailable.id]) {
+            await request(app).put(`/api/likes/${productId}`).auth(customerToken, { type: "bearer" }).expect(200);
+            await request(app).delete(`/api/likes/${productId}`).auth(customerToken, { type: "bearer" }).expect(204);
+        }
+        assert.deepEqual(await snapshot(), before);
+    });
+
+    it("removes dependent likes when their user or product is deleted", async () => {
+        for (const token of [customerToken, adminToken]) {
+            await request(app).put(`/api/likes/${product.id}`).auth(token, { type: "bearer" }).expect(200);
+        }
+        await prisma.user.delete({ where: { id: customer.id } });
+        assert.equal(await prisma.productLike.count(), 1);
+        await prisma.product.delete({ where: { id: product.id } });
+        assert.equal(await prisma.productLike.count(), 0);
     });
 });

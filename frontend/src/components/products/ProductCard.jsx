@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { getProductImage } from "../../lib/productImage";
+import LikeButton from "./LikeButton";
 
 export default function ProductCard({ product }) {
     return (
+        <article className="relative">
         <Link to={`/products/${product.id}`} className="group block">
             <div className="relative aspect-[3/4] rounded-3xl bg-neutral-200 overflow-hidden mb-4">
                 <img
@@ -22,5 +24,7 @@ export default function ProductCard({ product }) {
             <h3 className="font-semibold text-lg mb-1">{product.name}</h3>
             <p className="text-neutral-500">R {Number(product.price).toLocaleString()}</p>
         </Link>
+        <LikeButton product={product} className="absolute right-4 top-4 z-10" />
+        </article>
     );
 }

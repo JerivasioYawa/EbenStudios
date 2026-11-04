@@ -31,8 +31,9 @@ authentication, role permissions, catalogue and image uploads, checkout,
 inventory rollback, order privacy, and order status changes. Authenticated cart
 coverage includes ownership, positive integer quantities, stock availability,
 expired sessions, and checkout from saved cart contents using current prices.
-Each run applies
-the committed migrations to its own temporary SQLite database and removes it
+Likes coverage includes authenticated ownership, repeated and concurrent requests,
+unique pairs, deleted products/users, and unchanged cart/stock snapshots.
+Each run applies the committed migrations to its own temporary SQLite database and removes it
 afterward. Uploads are temporary too. The app module does not open a listener;
 Supertest manages its own temporary server.
 
@@ -48,6 +49,9 @@ Set-Location ..
 Vitest uses React, jsdom, Testing Library, and jest-dom. The tests cover cart
 totals, persistence, removal, legacy storage isolation, protected routes, safe
 login return URLs, account changes, and central expired-session handling.
+Likes tests also cover local guest persistence, keyboard hearts outside links,
+storage errors, one merge job during Strict Mode replay, acknowledged merge retry,
+and old-account response suppression.
 DOM cleanup and storage resets run after each test. Only tests under `src/`
 are collected by Vitest, so Playwright specs are kept separate.
 
@@ -76,9 +80,12 @@ only external placeholder images are fulfilled locally.
 The authenticated-cart journeys also check guest login redirects, full product
 URL restoration, guest API rejection, persistent carts separated by account,
 logout clearing, and a real expired-session cart API failure followed by login.
-After Phase 3, the expected totals are 25 API tests, 28 frontend tests, and eight
-Chromium journeys. The [Phase 3 record](docs/phases/phase-03-authenticated-carts/README.md)
-contains the API contract, migration steps, and detailed checkpoint results.
+Likes journeys cover guest refresh persistence, mouse/keyboard controls, merging
+guest preferences exactly once after login, account likes in an independent
+browser context, and unchanged cart/stock data.
+After Phase 4, the expected totals are 33 API tests, 43 frontend tests, and 11
+Chromium journeys. The [Phase 4 record](docs/phases/phase-04-product-likes/README.md)
+contains the likes API contract, migration steps, and detailed checkpoint results.
 
 Set `E2E_PORT` or `E2E_API_PORT` to use different local ports:
 

@@ -4,6 +4,7 @@ import logo from "../../assets/logo.svg";
 
 import {
     ShoppingCart,
+    Heart,
     Bell,
     User,
     Settings,
@@ -13,6 +14,7 @@ import {
 import SearchBar from "../ui/SearchBar";
 import MobileMenu from "./MobileMenu";
 import { useCart } from "../../hooks/useCart";
+import { useLikes } from "../../hooks/useLikes";
 
 function navLinkClass({ isActive }) {
     return isActive ? "text-black" : "text-neutral-600 hover:text-black transition";
@@ -21,6 +23,7 @@ function navLinkClass({ isActive }) {
 export default function Navbar() {
     const [open, setOpen] = useState(false);
     const { itemCount } = useCart();
+    const { likedIds } = useLikes();
 
     return (
         <>
@@ -63,6 +66,10 @@ export default function Navbar() {
                                             {itemCount}
                                         </span>
                                     )}
+                                </Link>
+                                <Link to="/liked" aria-label="Liked products" className="relative">
+                                    <Heart size={20} aria-hidden="true" />
+                                    {likedIds.length > 0 && <span className="absolute -top-2 -right-2 bg-black text-white text-[10px] font-semibold w-4 h-4 rounded-full flex items-center justify-center">{likedIds.length}</span>}
                                 </Link>
                                 <Bell size={20} />
                                 <Link to="/profile" aria-label="Profile"><User size={20} /></Link>

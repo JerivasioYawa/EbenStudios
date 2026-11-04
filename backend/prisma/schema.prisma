@@ -8,27 +8,29 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   name      String
-  email     String   @unique
+  email     String        @unique
   password  String
-  role      String   @default("CUSTOMER")
+  role      String        @default("CUSTOMER")
   orders    Order[]
   cart      Cart?
-  createdAt DateTime @default(now())
+  likes     ProductLike[]
+  createdAt DateTime      @default(now())
 }
 
 model Product {
-  id          Int         @id @default(autoincrement())
-  name        String      @unique
+  id          Int           @id @default(autoincrement())
+  name        String        @unique
   description String?
   price       Float
-  stock       Int         @default(0)
+  stock       Int           @default(0)
   tag         String?
   imageUrl    String?
   orderItems  OrderItem[]
   cartItems   CartItem[]
-  createdAt   DateTime    @default(now())
+  likes       ProductLike[]
+  createdAt   DateTime      @default(now())
 }
 
 model Order {
@@ -69,5 +71,17 @@ model CartItem {
   quantity  Int
 
   @@unique([cartId, productId])
+  @@index([productId])
+}
+
+model ProductLike {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
   @@index([productId])
 }

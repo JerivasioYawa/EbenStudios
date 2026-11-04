@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { returnTo } from "../lib/loginReturn";
 import { getProductImage } from "../lib/productImage";
 import Button from "../components/ui/Button";
+import LikeButton from "../components/products/LikeButton";
 
 export default function ProductPage() {
     const { id } = useParams();
@@ -93,9 +94,12 @@ export default function ProductPage() {
                         Eben Studios
                     </p>
 
-                    <h1 className="text-4xl md:text-5xl font-black uppercase leading-none mb-6">
+                    <div className="flex items-start justify-between gap-4 mb-6">
+                    <h1 className="text-4xl md:text-5xl font-black uppercase leading-none">
                         {product.name}
                     </h1>
+                    <LikeButton product={product} className="shrink-0" />
+                    </div>
 
                     <p className="text-2xl font-semibold mb-6">
                         R {Number(product.price).toLocaleString()}

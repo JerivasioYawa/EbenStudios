@@ -34,6 +34,7 @@ export default function MobileMenu({ isOpen, onClose }) {
                 <div className="flex flex-col gap-6 p-6 text-lg font-medium">
                     <Link to="/" onClick={onClose}>Home</Link>
                     <Link to="/shop" onClick={onClose}>Products</Link>
+                    <Link to="/liked" onClick={onClose}>Liked products</Link>
                     <Link to="/contact" onClick={onClose}>Contact</Link>
                 </div>
             </div>
