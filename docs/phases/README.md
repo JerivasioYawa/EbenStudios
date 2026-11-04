@@ -9,6 +9,7 @@ when resuming work or reproducing a completed phase.
 | Phase | Scope | Status | Verified on | Records |
 | --- | --- | --- | --- | --- |
 | 01 | Local environment, database migrations, and protected seeding | Completed | 2026-11-04 | [Rerun guide](phase-01-local-setup/README.md), [verification](phase-01-local-setup/verification.md) |
+| 02 | Test setup, database isolation, and initial frontend checks | Completed | 2026-11-04 | [Rerun guide](phase-02-test-setup/README.md), [verification](phase-02-test-setup/verification.md) |
 
 Phase 01 is a retrospective record of the local setup completed before the
 explicit Phase 2 checkpoint. Later phases will be added as their scope is agreed.
@@ -34,6 +35,7 @@ Each completed phase has its own Git branch and implementation commit:
 | Phase | Branch | Includes |
 | --- | --- | --- |
 | 01 | [phase/01-local-setup](https://github.com/JerivasioYawa/EbenStudios/tree/phase/01-local-setup) | Local configuration safeguards, protected seeding, and Phase 1 records |
+| 02 | [phase/02-test-setup](https://github.com/JerivasioYawa/EbenStudios/tree/phase/02-test-setup) | Phase 1 plus the original API, component, and browser test setup |
 
 These branches are stacked in order. An earlier phase branch preserves the
 implementation before later phase changes. The initial uncommitted work was
@@ -71,7 +73,7 @@ Writing these documents did not rerun the application checks or copy private dat
 1. Copy [_template](./_template/README.md) into a descriptive, numbered directory:
 
    ```powershell
-   Copy-Item -LiteralPath docs/phases/_template -Destination docs/phases/phase-02-short-name -Recurse
+   Copy-Item -LiteralPath docs/phases/_template -Destination docs/phases/phase-03-short-name -Recurse
    ```
 
 2. Fill in the phase title, requirements, file references, prerequisites, rerun
@@ -91,4 +93,4 @@ and `node_modules` stay in their normal ignored locations; reference relevant
 results in the phase record.
 
 The repository's [AGENTS.md](../../AGENTS.md) instructs future coding sessions to
-maintain these records.
+maintain these records. The general test command reference is [TESTING.md](../../TESTING.md).

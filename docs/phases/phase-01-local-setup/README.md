@@ -177,4 +177,4 @@ Expected API result: `status: ok`. Stop a development server with Ctrl+C in its 
 - [x] The frontend responded successfully at the URL printed by Vite.
 
 See [verification.md](verification.md) for the historical results and resolved
-setup issues.
+setup issues. Continue with [Phase 02](../phase-02-test-setup/README.md) for isolated tests.
