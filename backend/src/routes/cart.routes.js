@@ -25,6 +25,7 @@ router.post("/items", async (req, res, next) => {
         const cart = await prisma.$transaction(async (tx) => {
             const product = await tx.product.findUnique({ where: { id: productId } });
             if (!product) fail("Product not found", 404);
+            if (product.archivedAt) fail("This product is archived and cannot be purchased.", 409);
             if (quantity > product.stock) fail(`Not enough stock for "${product.name}"`);
 
             const owner = await tx.cart.upsert({
@@ -56,6 +57,7 @@ router.patch("/items/:productId", async (req, res, next) => {
             const where = { cartId_productId: { cartId: owner.id, productId } };
             const item = await tx.cartItem.findUnique({ where, include: { product: true } });
             if (!item) fail("Cart item not found", 404);
+            if (item.product.archivedAt) fail("This product is archived and cannot be purchased.", 409);
             if (quantity > item.product.stock) fail(`Not enough stock for "${item.product.name}"`);
             await tx.cartItem.update({ where, data: { quantity } });
             return readCart(tx, req.user.sub);

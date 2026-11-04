@@ -39,6 +39,12 @@ retry keys, immutable customer/product snapshots and historical product deletion
 Migration tests build the old schema with historical orders/carts/likes, verify
 conversion and sequence preservation, and prove invalid legacy data aborts without
 losing business records. They use Node's built-in node:sqlite DatabaseSync API.
+Admin management assertions also cover every admin endpoint's role checks,
+search/filter pagination, archive/restore, reasoned stock changes, image decoding
+and cleanup, payment evidence, enforced fulfilment transitions, concurrent
+cancellation, stock rollback and dashboard payment/refund aggregates. The admin
+migration test preserves original records and CHECK constraints while marking
+legacy payment labels Unverified instead of inventing receipts.
 Each run applies the committed migrations to its own temporary SQLite database and removes it
 afterward. Uploads are temporary too. The app module does not open a listener;
 Supertest manages its own temporary server.
@@ -60,6 +66,9 @@ storage errors, one merge job during Strict Mode replay, acknowledged merge retr
 and old-account response suppression.
 Money and checkout tests cover exact two-decimal totals, large aggregate values,
 persisted retry keys, failed responses, cart changes, account isolation and request headers.
+Admin interface tests cover filters/pages, stock-safe product editing, optional
+field clearing, required reasons, server rejection messages, payment controls,
+pending-input disabling, stale search suppression and server-provided financial totals.
 DOM cleanup and storage resets run after each test. Only tests under `src/`
 are collected by Vitest, so Playwright specs are kept separate.
 
@@ -94,10 +103,14 @@ browser context, and unchanged cart/stock data.
 The order-integrity journey submits three R0.29 items, lets the real API commit,
 discards the receipt, then verifies that retrying returns the same R0.87 order.
 It checks stock and cart state and verifies history after product edits/deletion.
-After Phase 5, the expected totals are 45 backend tests (41 API and 4 migration),
-51 frontend tests, and 12 Chromium journeys. The
-[Phase 5 record](docs/phases/phase-05-order-integrity/README.md) contains the checkout
-contract, conversion policy, disposable-copy verifier and detailed checkpoint results.
+Admin journeys also search/page products, archive/restore, inspect stock history,
+confirm full payments, process/ship orders, cancel with once-only stock restoration,
+record a processed refund and check the dashboard against API totals. Browser
+page errors and unexpected application console errors are checked for these flows.
+After Phase 6, the expected totals are 60 backend tests (55 API and 5 migration),
+60 frontend tests, and 14 Chromium journeys. The
+[Phase 6 record](docs/phases/phase-06-admin-management/README.md) contains management
+contracts, migration/backfill policy, disposable-copy verification and checkpoint evidence.
 
 Set `E2E_PORT` or `E2E_API_PORT` to use different local ports:
 

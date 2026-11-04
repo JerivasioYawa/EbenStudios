@@ -80,11 +80,15 @@ test("R0.29 times three survives a lost receipt, retries once, and keeps histori
     expect(await unchanged.json()).toEqual([committed]);
 
     const deleted = await request.delete(`${apiURL}/products/${product.id}`, { headers: adminHeaders });
-    expect(deleted.status()).toBe(204);
+    expect(deleted.status()).toBe(409);
+    const archived = await request.patch(`${apiURL}/admin/products/${product.id}/archive`, {
+        headers: adminHeaders, data: { archived: true, reason: "Retain history" },
+    });
+    expect(archived.status()).toBe(200);
     await page.reload();
     await expect(page.getByText(name + " × 3", { exact: true })).toBeVisible();
     const historical = await request.get(`${apiURL}/orders/mine`, { headers: customerHeaders });
     const retained = (await historical.json())[0];
-    expect(retained.items[0]).toMatchObject({ productId: null, productName: name, lineTotalCents: 87 });
+    expect(retained.items[0]).toMatchObject({ productId: product.id, productName: name, lineTotalCents: 87 });
     expect(retained.totalCents).toBe(87);
 });

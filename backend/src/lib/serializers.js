@@ -1,5 +1,5 @@
 export function productDto(product) {
-    return { ...product, price: product.priceCents / 100 };
+    return { ...product, price: product.priceCents / 100, lowStock: product.stock <= product.lowStockThreshold };
 }
 
 export function orderDto(order) {

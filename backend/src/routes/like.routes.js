@@ -14,7 +14,7 @@ function parseProductId(value) {
 router.get("/", async (req, res, next) => {
     try {
         const likes = await prisma.productLike.findMany({
-            where: { userId: req.user.sub },
+            where: { userId: req.user.sub, product: { archivedAt: null } },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: { product: true },
         });

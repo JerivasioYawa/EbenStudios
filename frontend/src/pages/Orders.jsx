@@ -89,6 +89,8 @@ export default function Orders() {
                             </div>
 
                             <div className="flex flex-col gap-2 mb-4">
+                                <p className="text-sm">Payment: {order.paymentStatus} · Fulfilment: {order.fulfilmentStatus}</p>
+                                {order.shippingReference && <p className="text-sm">Shipping reference: {order.shippingReference}</p>}
                                 {order.items.map((item) => (
                                     <div key={item.id} className="flex items-center justify-between text-sm text-neutral-600">
                                         <span>{item.productName} × {item.quantity}</span>

@@ -46,6 +46,7 @@ export async function placeOrder(client, user, key, address) {
                 for (const { productId, quantity } of cart.items) {
                     const product = await tx.product.findUnique({ where: { id: productId } });
                     if (!product) throw inputError("A product in your cart no longer exists");
+                    if (product.archivedAt) throw inputError(`"${product.name}" is archived and cannot be purchased.`, 409);
                     const line = lineTotalCents(product.priceCents, quantity);
                     totalCents = addCents(totalCents, line);
                     const changed = await tx.product.updateMany({
@@ -56,7 +57,10 @@ export async function placeOrder(client, user, key, address) {
                         productName: product.name, productDescription: product.description, productImageUrl: product.imageUrl });
                 }
                 const saved = await tx.order.update({
-                    where: { id: claim.id }, data: { totalCents, items: { create: items } }, include: { items: true },
+                    where: { id: claim.id }, data: { totalCents, items: { create: items }, history: { create: {
+                        actorId: user.sub, actorName: user.name, actorEmail: user.email,
+                        type: "Created", toStatus: "Unfulfilled", note: "Order placed by customer",
+                    } } }, include: { items: true },
                 });
                 await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
                 return saved;

@@ -3,9 +3,11 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { checkoutKey, placeOrder, shippingAddress } from "../lib/checkout.js";
 import { orderDto } from "../lib/serializers.js";
+import { changeFulfilment } from "../lib/order-management.js";
+import { id } from "../lib/admin.js";
 
 const router = Router();
-const VALID_STATUSES = ["Pending", "Paid", "Shipped", "Delivered", "Cancelled"];
+const VALID_STATUSES = ["Processing", "Shipped", "Delivered", "Cancelled"];
 
 router.get("/", requireAuth, requireAdmin, async (req, res, next) => {
     try {
@@ -29,9 +31,7 @@ router.patch("/:id/status", requireAuth, requireAdmin, async (req, res, next) =>
         if (!VALID_STATUSES.includes(status)) {
             return res.status(400).json({ message: "Status must be one of: " + VALID_STATUSES.join(", ") });
         }
-        const order = await prisma.order.update({
-            where: { id: Number(req.params.id) }, data: { status }, include: { items: true },
-        });
+        const order = await changeFulfilment(req.user, id(req.params.id), { ...req.body, fulfilmentStatus: status });
         res.json(orderDto(order));
     } catch (error) {
         if (error.code === "P2025") return res.status(404).json({ message: "Order not found" });

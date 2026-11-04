@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { createTestDatabase, deployMigrations } from "../test-support/database.js";
+import { cpSync } from "node:fs";
+import path from "node:path";
+import { backendDirectory, createTestDatabase, deployMigrations } from "../test-support/database.js";
 import { ORDER_INTEGRITY_MIGRATION, digest, legacySnapshot, readBusinessRows, verifyMigratedDatabase } from "../test-support/order-integrity-migration.js";
 
 function historicalFixtures(file) {
@@ -30,12 +32,19 @@ function historicalFixtures(file) {
     } finally { db.close(); }
 }
 
+function applyIntegrity(database) {
+    // Freeze this test at Phase 5 so later additive migrations have their own tests.
+    cpSync(path.join(backendDirectory, "prisma/migrations", ORDER_INTEGRITY_MIGRATION),
+        path.join(database.directory, "prisma/migrations", ORDER_INTEGRITY_MIGRATION), { recursive: true });
+    deployMigrations(database.url, database.schemaPath);
+}
+
 it("converts historical amounts, backfills snapshots, and preserves every row, relationship, and sequence", async () => {
     const database = await createTestDatabase({ beforeMigration: ORDER_INTEGRITY_MIGRATION });
     try {
         historicalFixtures(database.file);
         const before = legacySnapshot(database.file);
-        deployMigrations(database.url);
+        applyIntegrity(database);
         assert.equal(verifyMigratedDatabase(database.file, before).preserved, true);
         const db = new DatabaseSync(database.file);
         try {
@@ -73,7 +82,7 @@ for (const [label, corrupt] of [
             db.exec(corrupt);
             const before = digest(readBusinessRows(db));
             db.close();
-            assert.throws(() => deployMigrations(database.url), /order_integrity_requires_valid_legacy_data/);
+            assert.throws(() => applyIntegrity(database), /order_integrity_requires_valid_legacy_data/);
             const after = new DatabaseSync(database.file, { readOnly: true });
             try { assert.equal(digest(readBusinessRows(after)), before); }
             finally { after.close(); }

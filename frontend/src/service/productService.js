@@ -14,7 +14,7 @@ function toFormData(product) {
     const formData = new FormData();
 
     Object.entries(product).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
+        if (value !== undefined && value !== null) {
             formData.append(key, value);
         }
     });

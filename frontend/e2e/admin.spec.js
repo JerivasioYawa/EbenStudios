@@ -5,6 +5,7 @@ test("admin logs in, creates and edits a product with an image, then deletes it"
     const name = `Browser Tee ${randomUUID()}`;
     await loginAdmin(page);
     await page.getByRole("link", { name: "Products", exact: true }).click();
+    await page.getByLabel("Search products").fill(name);
     await page.getByRole("button", { name: "Add Product", exact: true }).click();
     await page.getByPlaceholder("Name", { exact: true }).fill(name);
     await page.getByPlaceholder("Price", { exact: true }).fill("750");
@@ -19,11 +20,19 @@ test("admin logs in, creates and edits a product with an image, then deletes it"
     await page.reload();
     await row.getByRole("button", { name: "Edit", exact: true }).click();
     await page.getByPlaceholder("Price", { exact: true }).fill("799");
-    await page.getByPlaceholder("Stock", { exact: true }).fill("6");
     await page.getByRole("button", { name: "Save Changes", exact: true }).click();
     await expect(row.getByRole("cell", { name: "R 799.00", exact: true })).toBeVisible();
+    await row.getByRole("button", { name: "Adjust Stock", exact: true }).click();
+    await page.getByLabel("Stock adjustment", { exact: true }).fill("1");
+    await page.getByLabel("Reason", { exact: true }).fill("Browser warehouse count");
+    await page.getByRole("button", { name: "Save Adjustment", exact: true }).click();
     await page.reload();
     await expect(row.getByRole("cell", { name: "6", exact: true })).toBeVisible();
+    await page.goto("/shop");
+    await page.getByRole("heading", { name, exact: true }).click();
+    await expect(page.getByText("R 799.00", { exact: true })).toBeVisible();
+    await page.goto("/admin/products");
+    await page.getByLabel("Search products").fill(name);
     await row.getByRole("button", { name: "Delete", exact: true }).click();
     await row.getByRole("button", { name: "Confirm", exact: true }).click();
     await expect(row).toHaveCount(0);
@@ -59,14 +68,21 @@ test("admin fulfils an order and the customer sees the persisted status", async 
 
     await loginAdmin(page);
     await page.getByRole("link", { name: "Orders", exact: true }).click();
+    await page.getByLabel("Search orders").fill(`#EB-${order.id}`);
     const row = page.getByRole("row").filter({ hasText: `#EB-${order.id}` });
     await expect(row).toBeVisible();
-    const statusResponse = page.waitForResponse((response) =>
-        response.url() === `${apiURL}/orders/${order.id}/status` && response.request().method() === "PATCH");
-    await row.getByRole("combobox").selectOption("Shipped");
-    expect((await statusResponse).status()).toBe(200);
+    await row.getByRole("button", { name: "View Details", exact: true }).click();
+    const details = page.getByRole("region", { name: "Order details" });
+    await expect(details.getByText(customer.email, { exact: true })).toBeVisible();
+    await expect(details.getByText(order.shippingAddress, { exact: true })).toBeVisible();
+    await page.getByLabel("Payment reference", { exact: true }).fill(`PAY-${randomUUID()}`);
+    await page.getByRole("button", { name: "Confirm Payment", exact: true }).click();
+    await page.getByRole("button", { name: "Start Processing", exact: true }).click();
+    await page.getByLabel("Shipping reference", { exact: true }).fill(`SHIP-${randomUUID()}`);
+    await page.getByRole("button", { name: "Mark Shipped", exact: true }).click();
+    await expect(row.getByRole("cell", { name: "Shipped", exact: true })).toBeVisible();
     await page.reload();
-    await expect(row.getByRole("combobox")).toHaveValue("Shipped");
+    await expect(row.getByRole("cell", { name: "Shipped", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Log Out", exact: true }).click();
     await login(page, customer);
     await expect(page).toHaveURL(/\/$/);

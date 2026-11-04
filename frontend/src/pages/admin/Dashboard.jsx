@@ -1,93 +1,39 @@
-import { useEffect, useState } from "react";
-import { DollarSign, ShoppingBag, Users, Package } from "lucide-react";
-import { getProducts } from "../../service/productService";
-import { getOrders } from "../../service/orderService";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { getAudit, getDashboard } from "../../service/adminService";
+import { useAdminQuery } from "../../hooks/useAdminQuery";
+import { actionClass, Pagination, QueryState } from "../../components/admin/ManagementControls";
 import { formatMoney } from "../../lib/money";
 
 export default function Dashboard() {
-    const [products, setProducts] = useState([]);
-    const [orders, setOrders] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-
-    useEffect(() => {
-        Promise.all([getProducts(), getOrders()])
-            .then(([productsData, ordersData]) => {
-                setProducts(productsData);
-                setOrders(ordersData);
-            })
-            .catch((err) => setError(err.response?.data?.message || "Failed to load dashboard data."))
-            .finally(() => setLoading(false));
-    }, []);
-
-    const revenueCents = orders.reduce((sum, order) => sum + BigInt(order.totalCents), 0n);
-    const customerCount = new Set(orders.map((order) => order.userId)).size;
-
-    const stats = [
-        { label: "Revenue", value: formatMoney(revenueCents), icon: DollarSign },
-        { label: "Orders", value: orders.length, icon: ShoppingBag },
-        { label: "Customers", value: customerCount, icon: Users },
-        { label: "Products", value: products.length, icon: Package },
-    ];
-
-    return (
-        <div>
-            <h1 className="text-3xl font-black uppercase leading-none mb-8">
-                Dashboard
-            </h1>
-
-            {error && (
-                <p className="text-sm text-red-600 mb-4">{error}</p>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                {stats.map(({ label, value, icon: Icon }) => (
-                    <div
-                        key={label}
-                        className="bg-white rounded-3xl p-6 border border-black/5 shadow-sm"
-                    >
-                        <div className="flex items-center justify-between mb-6">
-                            <span className="text-sm text-neutral-500">{label}</span>
-                            <Icon size={18} className="text-neutral-400" />
-                        </div>
-
-                        <p className="text-2xl font-bold">{loading ? "..." : value}</p>
-                    </div>
-                ))}
-            </div>
-
-            <div className="bg-white rounded-3xl border border-black/5 shadow-sm overflow-hidden">
-                {loading ? (
-                    <p className="p-8 text-center text-neutral-500">Loading recent orders...</p>
-                ) : orders.length === 0 ? (
-                    <p className="p-8 text-neutral-500">
-                        No recent activity yet. Orders will show up here once customers
-                        start checking out.
-                    </p>
-                ) : (
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="border-b border-black/5 text-sm text-neutral-500">
-                                <th className="px-6 py-4 font-medium">Order</th>
-                                <th className="px-6 py-4 font-medium">Customer</th>
-                                <th className="px-6 py-4 font-medium">Total</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {orders.slice(0, 5).map((order) => (
-                                <tr key={order.id} className="border-b border-black/5 last:border-0">
-                                    <td className="px-6 py-4 font-semibold">#EB-{order.id}</td>
-                                    <td className="px-6 py-4 text-neutral-600">{order.customerName}</td>
-                                    <td className="px-6 py-4 text-neutral-600">
-                                        {formatMoney(order.totalCents)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                )}
-            </div>
-        </div>
-    );
+    const [revision, setRevision] = useState(0), [auditPage, setAuditPage] = useState(1);
+    const result = useAdminQuery(getDashboard, {}, revision), audit = useAdminQuery(getAudit, { page: auditPage, pageSize: 10 }, revision);
+    const data = result.data;
+    const stats = data ? [
+        ["Confirmed payments", formatMoney(data.confirmedPaymentsCents)],
+        ["Cancelled payments awaiting refund", formatMoney(data.awaitingRefundCents)],
+        ["Recorded refunds", formatMoney(data.refundedCents)],
+        ["Pending payment orders", data.pendingOrders], ["Unverified legacy payments", data.unverifiedOrders],
+        ["Orders", data.orders], ["Customers", data.customers], ["Active products", data.products], ["Archived products", data.archivedProducts],
+    ] : [];
+    return <div>
+        <div className="flex justify-between mb-8"><h1 className="text-3xl font-black uppercase">Dashboard</h1><button className={actionClass} onClick={() => setRevision(current => current + 1)}>Refresh</button></div>
+        <QueryState {...result} retry={() => setRevision(revision + 1)} />
+        {data && <>
+            <p className="text-sm text-neutral-600 mb-6">Confirmed payments include verified payment records for orders that have not been cancelled. Pending and cancelled orders are excluded; refunds are shown separately.</p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">{stats.map(([label, value]) => <div key={label} className="bg-white p-6 border rounded-3xl"><h2 className="text-neutral-500">{label}</h2><p className="text-2xl font-bold mt-4">{value}</p></div>)}</div>
+            <section className="bg-white p-6 border rounded-3xl mb-8"><h2 className="text-xl font-bold mb-4">Recent orders</h2>
+                {data.recentOrders.length === 0 && <p>No recent orders.</p>}
+                <ul>{data.recentOrders.map(order => <li key={order.id} className="py-3 border-b"><Link className="underline font-semibold" to={`/admin/orders?order=${order.id}`}>#EB-{order.id}</Link> · {order.customerName} · {formatMoney(order.totalCents)} · {order.paymentStatus} / {order.fulfilmentStatus}</li>)}</ul>
+            </section>
+            <section className="bg-white p-6 border rounded-3xl mb-8"><h2 className="text-xl font-bold mb-4">Low stock</h2>
+                {data.lowStock.length === 0 ? <p>No active products are below their stock threshold.</p> : <ul>{data.lowStock.map(product => <li key={product.id}>{product.name}: {product.stock} remaining (threshold {product.lowStockThreshold})</li>)}</ul>}
+                <Link className="block underline mt-4" to="/admin/products">Manage products</Link>
+            </section>
+        </>}
+        <section className="bg-white p-6 border rounded-3xl"><h2 className="text-xl font-bold mb-4">Admin activity</h2>
+            <QueryState {...audit} retry={() => setRevision(revision + 1)} />
+            {audit.data && <><ul>{audit.data.items.map(row => <li key={row.id} className="py-3 border-b">{row.action} · {row.entityType} #{row.entityId}{row.reason ? " · " + row.reason : ""}<br /><span className="text-sm text-neutral-500">{row.actorName} · {new Date(row.createdAt).toLocaleString()}</span></li>)}</ul><Pagination {...audit.data} onChange={setAuditPage} /></>}
+        </section>
+    </div>;
 }

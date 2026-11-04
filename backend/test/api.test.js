@@ -6,6 +6,8 @@ import { after, before, beforeEach, describe, it } from "node:test";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import request from "supertest";
+import sharp from "sharp";
+import { readdir } from "node:fs/promises";
 import { createTestDatabase } from "../test-support/database.js";
 
 describe("Eben Studios API", { concurrency: false }, () => {
@@ -16,7 +18,7 @@ describe("Eben Studios API", { concurrency: false }, () => {
         NODE_ENV: process.env.NODE_ENV,
     };
     const password = randomBytes(24).toString("hex");
-    let database, app, prisma, hashedPassword, admin, customer, product;
+    let database, app, prisma, uploadsDirPath, hashedPassword, admin, customer, product;
     let adminToken, customerToken;
 
     before(async () => {
@@ -27,12 +29,17 @@ describe("Eben Studios API", { concurrency: false }, () => {
         // Uploads, as well as the database, stay inside this disposable directory.
         process.chdir(database.directory);
         ({ default: app } = await import("../src/app.js"));
+        ({ uploadsDirPath } = await import("../src/middleware/upload.js"));
         ({ prisma } = await import("../src/lib/prisma.js"));
         hashedPassword = await bcrypt.hash(password, 4);
     });
 
     beforeEach(async () => {
         await prisma.$transaction([
+            prisma.paymentRecord.deleteMany(),
+            prisma.orderEvent.deleteMany(),
+            prisma.stockAdjustment.deleteMany(),
+            prisma.adminAudit.deleteMany(),
             prisma.productLike.deleteMany(),
             prisma.cartItem.deleteMany(),
             prisma.cart.deleteMany(),
@@ -142,15 +149,15 @@ describe("Eben Studios API", { concurrency: false }, () => {
     });
 
     it("lets admins create, upload an image, update, and delete a product", async () => {
-        const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=", "base64");
+        const image = await sharp({ create: { width: 2, height: 2, channels: 3, background: "red" } }).png().toBuffer();
         const created = await request(app).post("/api/products").auth(adminToken, { type: "bearer" })
             .field("name", "Admin Tee").field("price", "75").field("stock", "8")
             .attach("image", image, { filename: "tee.png", contentType: "image/png" }).expect(201);
         assert.equal(created.body.price, 75);
         const uploaded = await request(app).get(new URL(created.body.imageUrl).pathname).expect(200);
-        assert.deepEqual(uploaded.body, image);
+        assert.equal((await sharp(uploaded.body).metadata()).format, "png");
         const updated = await request(app).put(`/api/products/${created.body.id}`)
-            .auth(adminToken, { type: "bearer" }).send({ price: 90, stock: 10 }).expect(200);
+            .auth(adminToken, { type: "bearer" }).send({ price: 90, stock: 10, stockReason: "Inventory recount" }).expect(200);
         assert.equal(updated.body.price, 90);
         assert.equal(updated.body.stock, 10);
         assert.equal(updated.body.imageUrl, created.body.imageUrl);
@@ -210,14 +217,16 @@ describe("Eben Studios API", { concurrency: false }, () => {
 
     it("lets admins update order status and rejects invalid or missing orders", async () => {
         const order = await prisma.order.create({ data: { userId: customer.id, totalCents: 10000, customerName: customer.name, customerEmail: customer.email } });
+        await request(app).post(`/api/admin/orders/${order.id}/payments`).auth(adminToken, { type: "bearer" })
+            .send({ reference: randomUUID(), amountCents: 10000 }).expect(200);
         const updated = await request(app).patch(`/api/orders/${order.id}/status`)
-            .auth(adminToken, { type: "bearer" }).send({ status: "Shipped" }).expect(200);
-        assert.equal(updated.body.status, "Shipped");
-        assert.equal((await prisma.order.findUnique({ where: { id: order.id } })).status, "Shipped");
+            .auth(adminToken, { type: "bearer" }).send({ status: "Processing" }).expect(200);
+        assert.equal(updated.body.status, "Processing");
+        assert.equal((await prisma.order.findUnique({ where: { id: order.id } })).status, "Processing");
         await request(app).patch(`/api/orders/${order.id}/status`)
             .auth(adminToken, { type: "bearer" }).send({ status: "Unknown" }).expect(400);
-        await request(app).patch("/api/orders/0/status")
-            .auth(adminToken, { type: "bearer" }).send({ status: "Paid" }).expect(404);
+        await request(app).patch("/api/orders/999999/status")
+            .auth(adminToken, { type: "bearer" }).send({ status: "Processing" }).expect(404);
     });
 
     it("rejects every guest cart API action and saves nothing", async () => {
@@ -558,7 +567,8 @@ describe("Eben Studios API", { concurrency: false }, () => {
         assert.equal(await prisma.order.count(), 2);
     });
 
-    it("keeps historical customer and product details after editing or deleting the product", async () => {
+    it("keeps historical customer and product details after edits and archiving, and prevents destructive deletion", async (t) => {
+        t.mock.method(console, "error", () => {});
         await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" })
             .send({ productId: product.id, quantity: 1 }).expect(200);
         const placed = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" })
@@ -569,13 +579,244 @@ describe("Eben Studios API", { concurrency: false }, () => {
         await prisma.user.update({ where: { id: customer.id }, data: { name: "Changed Customer", email: "changed@eben.test" } });
         const edited = await request(app).get("/api/orders/mine").auth(customerToken, { type: "bearer" }).expect(200);
         assert.deepEqual(edited.body[0], placed.body);
-        await request(app).delete("/api/products/" + product.id).auth(adminToken, { type: "bearer" }).expect(204);
+        await request(app).delete("/api/products/" + product.id).auth(adminToken, { type: "bearer" }).expect(409);
+        await request(app).patch(`/api/admin/products/${product.id}/archive`).auth(adminToken, { type: "bearer" })
+            .send({ archived: true, reason: "Discontinued" }).expect(200);
         const deleted = await request(app).get("/api/orders/mine").auth(customerToken, { type: "bearer" }).expect(200);
-        assert.equal(deleted.body[0].items[0].productId, null);
+        assert.equal(deleted.body[0].items[0].productId, product.id);
         assert.equal(deleted.body[0].items[0].productName, "Test Hoodie");
         assert.equal(deleted.body[0].items[0].unitPriceCents, 10000);
         assert.equal(deleted.body[0].customerName, "Test Customer");
         assert.equal(deleted.body[0].totalCents, 10000);
     });
 
+    const call = (method, url, body) => request(app)[method](url).auth(adminToken, { type: "bearer" }).send(body);
+    async function place(quantity = 1) {
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" }).send({ productId: product.id, quantity }).expect(200);
+        return (await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).set("Idempotency-Key", randomUUID()).send({ shippingAddress: "Admin Test Road" }).expect(201)).body;
+    }
+
+    it("rejects guests and customers on every admin management endpoint", async () => {
+        for (const [method, url] of [
+            ["get", "/api/admin/products"], ["get", "/api/admin/orders"], ["get", "/api/admin/orders/1"],
+            ["get", "/api/admin/dashboard"], ["get", "/api/admin/audit"], ["get", `/api/admin/products/${product.id}/history`],
+            ["patch", `/api/admin/products/${product.id}/archive`], ["post", `/api/admin/products/${product.id}/stock-adjustments`],
+            ["patch", "/api/admin/orders/1/fulfilment"], ["post", "/api/admin/orders/1/cancel"],
+            ["post", "/api/admin/orders/1/payments"], ["post", "/api/admin/orders/1/refunds"], ["patch", "/api/admin/orders/1/shipping"],
+        ]) {
+            await request(app)[method](url).expect(401);
+            await request(app)[method](url).auth(customerToken, { type: "bearer" }).expect(403);
+        }
+        assert.equal(await prisma.adminAudit.count(), 0);
+        assert.equal(await prisma.stockAdjustment.count(), 0);
+    });
+
+    it("validates product text, money, thresholds and stock without persisting failed changes", async t => {
+        t.mock.method(console, "error", () => {});
+        for (const data of [{ name: " " }, { name: 12 }, { name: "x".repeat(121) }, { description: [] }, { tag: "x".repeat(81) }, { lowStockThreshold: -1 }, { lowStockThreshold: 1.5 }, { stock: null }]) {
+            await call("put", `/api/products/${product.id}`, data).expect(400);
+        }
+        await call("post", "/api/products", { name: "No price" }).expect(400);
+        const created = await call("post", "/api/products", { name: "  Valid Tee  ", price: "0.29", stock: 2, lowStockThreshold: 3, actorId: customer.id }).expect(201);
+        assert.equal(created.body.name, "Valid Tee");
+        assert.equal(created.body.lowStock, true);
+        const audit = await prisma.adminAudit.findFirst();
+        assert.equal(audit.actorId, admin.id);
+        assert.equal(audit.actorName, admin.name);
+        assert.equal(JSON.parse(audit.afterJson).priceCents, 29);
+        assert.equal(await prisma.adminAudit.count(), 1);
+        const stock = await prisma.stockAdjustment.findFirst();
+        assert.equal(stock.reason, "Initial stock on creation");
+        assert.equal(stock.delta, 2);
+    });
+
+    it("searches and filters products with stable server pagination and validated bounds", async t => {
+        t.mock.method(console, "error", () => {});
+        await prisma.product.createMany({ data: Array.from({ length: 12 }, (_, index) => ({
+            name: `Filter Tee ${index}`, description: "Searchable range", tag: index < 8 ? "Drop" : "Other", priceCents: 100,
+            stock: index, lowStockThreshold: 3, archivedAt: index === 11 ? new Date() : null,
+        })) });
+        const first = await call("get", "/api/admin/products?q=Filter%20Tee&pageSize=5").expect(200);
+        const second = await call("get", "/api/admin/products?q=Filter%20Tee&pageSize=5&page=2").expect(200);
+        assert.equal(first.body.total, 11); assert.equal(first.body.totalPages, 3);
+        assert.equal(new Set([...first.body.items, ...second.body.items].map(row => row.id)).size, 10);
+        const low = await call("get", "/api/admin/products?q=Searchable&stock=low&tag=Drop").expect(200);
+        assert.equal(low.body.total, 4); assert.ok(low.body.items.every(row => row.lowStock));
+        const archived = await call("get", "/api/admin/products?status=archived").expect(200);
+        assert.equal(archived.body.total, 1);
+        for (const query of ["page=0", "pageSize=101", "status=unknown", "stock=unknown", "page=1.2"]) await call("get", "/api/admin/products?" + query).expect(400);
+    });
+
+    it("archives and restores products while blocking every purchase path and retaining history", async t => {
+        t.mock.method(console, "error", () => {});
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" }).send({ productId: product.id, quantity: 1 }).expect(200);
+        const archived = await call("patch", `/api/admin/products/${product.id}/archive`, { archived: true, reason: "Season ended" }).expect(200);
+        assert.ok(archived.body.archivedAt);
+        assert.equal((await request(app).get("/api/products").expect(200)).body.length, 0);
+        await request(app).get(`/api/products/${product.id}`).expect(404);
+        // Guest-like merging must remain safe even if a liked product was archived.
+        await request(app).put(`/api/likes/${product.id}`).auth(customerToken, { type: "bearer" }).expect(200);
+        assert.equal((await request(app).get("/api/likes").auth(customerToken, { type: "bearer" }).expect(200)).body.length, 0);
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" }).send({ productId: product.id, quantity: 1 }).expect(409);
+        await request(app).patch(`/api/cart/items/${product.id}`).auth(customerToken, { type: "bearer" }).send({ quantity: 2 }).expect(409);
+        await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).set("Idempotency-Key", randomUUID()).send({}).expect(409);
+        assert.equal(await prisma.order.count(), 0);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
+        await call("patch", `/api/admin/products/${product.id}/archive`, { archived: false, reason: "New season" }).expect(200);
+        await request(app).get(`/api/products/${product.id}`).expect(200);
+        assert.equal((await request(app).get("/api/likes").auth(customerToken, { type: "bearer" }).expect(200)).body[0].id, product.id);
+        const order = await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).set("Idempotency-Key", randomUUID()).send({}).expect(201);
+        assert.equal(order.body.items[0].productName, product.name);
+        const audit = await call("get", `/api/admin/audit?entityType=Product&entityId=${product.id}`).expect(200);
+        assert.equal(audit.body.total, 2); assert.equal(audit.body.items[0].actorEmail, admin.email);
+    });
+
+    it("records reasoned stock adjustments atomically, rejects invalid deltas and serializes concurrent adjustments", async t => {
+        t.mock.method(console, "error", () => {});
+        for (const body of [{ delta: 1 }, { delta: 1, reason: " " }, { delta: 0, reason: "Invalid" }, { delta: 1.5, reason: "Invalid" }, { delta: -6, reason: "Invalid" }, { delta: "2", reason: "Invalid" }]) {
+            await call("post", `/api/admin/products/${product.id}/stock-adjustments`, body).expect(body.delta === -6 ? 409 : 400);
+        }
+        assert.equal(await prisma.stockAdjustment.count(), 0); assert.equal(await prisma.adminAudit.count(), 0);
+        await Promise.all([2, -1].map(delta => call("post", `/api/admin/products/${product.id}/stock-adjustments`, { delta, reason: "Warehouse count", actorId: customer.id }).expect(200)));
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 6);
+        const history = await call("get", `/api/admin/products/${product.id}/history`).expect(200);
+        assert.equal(history.body.adjustments.total, 2);
+        for (const row of history.body.adjustments.items) {
+            assert.equal(row.actorId, admin.id); assert.equal(row.actorName, admin.name); assert.ok(row.createdAt);
+            assert.equal(row.afterStock, row.beforeStock + row.delta); assert.equal(row.reason, "Warehouse count");
+        }
+    });
+
+    it("requires a stock reason on the legacy product edit path too", async t => {
+        t.mock.method(console, "error", () => {});
+        await call("put", `/api/products/${product.id}`, { stock: 9 }).expect(400);
+        await call("put", `/api/products/${product.id}`, { stock: 9, stockReason: "Physical recount" }).expect(200);
+        const row = await prisma.stockAdjustment.findFirst();
+        assert.equal(row.delta, 4); assert.equal(row.reason, "Physical recount"); assert.equal(row.actorId, admin.id);
+    });
+
+    it("decodes image content and cleans files after failed saves without removing the current image", async t => {
+        t.mock.method(console, "error", () => {});
+        const image = await sharp({ create: { width: 2, height: 2, channels: 3, background: "red" } }).png().toBuffer();
+        const files = async () => (await readdir(uploadsDirPath).catch(() => [])).sort();
+        const before = await files();
+        for (const buffer of [Buffer.from("not an image"), image.subarray(0, 40), Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')]) {
+            await request(app).put(`/api/products/${product.id}`).auth(adminToken, { type: "bearer" }).attach("image", buffer, { filename: "fake.png", contentType: "image/png" }).expect(400);
+        }
+        await request(app).put(`/api/products/${product.id}`).auth(adminToken, { type: "bearer" }).attach("image", image, { filename: "fake.jpg", contentType: "image/jpeg" }).expect(400);
+        await request(app).put(`/api/products/${product.id}`).auth(adminToken, { type: "bearer" }).attach("image", Buffer.alloc(5 * 1024 * 1024 + 1), { filename: "big.png", contentType: "image/png" }).expect(400);
+        await request(app).post("/api/products").auth(adminToken, { type: "bearer" }).field("name", product.name).field("price", "10").attach("image", image, { filename: "valid.png", contentType: "image/png" }).expect(409);
+        assert.deepEqual(await files(), before);
+        const saved = await request(app).put(`/api/products/${product.id}`).auth(adminToken, { type: "bearer" }).attach("image", image, { filename: "valid.png", contentType: "image/png" }).expect(200);
+        const currentFiles = await files();
+        await request(app).put(`/api/products/${product.id}`).auth(adminToken, { type: "bearer" }).field("stock", "9").attach("image", image, { filename: "other.png", contentType: "image/png" }).expect(400);
+        assert.deepEqual(await files(), currentFiles);
+        await request(app).get(new URL(saved.body.imageUrl).pathname).expect(200);
+    });
+
+    it("cleans replaced unused images and preserves an image referenced by historical order details", async () => {
+        const image = color => sharp({ create: { width: 2, height: 2, channels: 3, background: color } }).png().toBuffer();
+        const save = async color => request(app).put(`/api/products/${product.id}`).auth(adminToken, { type: "bearer" }).attach("image", await image(color), { filename: "image.png", contentType: "image/png" }).expect(200);
+        const first = await save("red"); const second = await save("blue");
+        await request(app).get(new URL(first.body.imageUrl).pathname).expect(404);
+        const order = await place();
+        assert.equal(order.items[0].productImageUrl, second.body.imageUrl);
+        await save("green");
+        await request(app).get(new URL(second.body.imageUrl).pathname).expect(200);
+    });
+
+    it("searches and filters order pages and returns customer, address, items and actor history", async () => {
+        const first = await place(); const second = await place();
+        await call("post", `/api/admin/orders/${first.id}/payments`, { reference: randomUUID(), amountCents: first.totalCents }).expect(200);
+        const list = await call("get", "/api/admin/orders?pageSize=1").expect(200);
+        assert.equal(list.body.total, 2); assert.equal(list.body.totalPages, 2); assert.equal(list.body.items[0].id, second.id);
+        const filter = await call("get", "/api/admin/orders?paymentStatus=Confirmed&fulfilmentStatus=Unfulfilled").expect(200);
+        assert.deepEqual(filter.body.items.map(row => row.id), [first.id]);
+        const search = await call("get", `/api/admin/orders?q=%23EB-${second.id}`).expect(200);
+        assert.equal(search.body.total, 1);
+        const details = await call("get", `/api/admin/orders/${first.id}`).expect(200);
+        assert.equal(details.body.customerEmail, customer.email); assert.equal(details.body.shippingAddress, "Admin Test Road");
+        assert.equal(details.body.items[0].productName, product.name); assert.equal(details.body.history[0].type, "Created");
+        assert.equal(details.body.payments[0].actorId, admin.id); assert.equal(details.body.history[1].actorId, admin.id);
+    });
+
+    it("enforces fulfilment transitions and shipping requirements on both admin and legacy routes", async t => {
+        t.mock.method(console, "error", () => {});
+        const order = await place();
+        await call("patch", `/api/admin/orders/${order.id}/fulfilment`, { fulfilmentStatus: "Delivered" }).expect(409);
+        await call("patch", `/api/orders/${order.id}/status`, { status: "Shipped", shippingReference: "FORGED" }).expect(409);
+        await call("patch", `/api/orders/${order.id}/status`, { status: "Paid" }).expect(400);
+        assert.equal(await prisma.adminAudit.count(), 0); assert.equal(await prisma.paymentRecord.count(), 0);
+        assert.equal((await prisma.order.findUnique({ where: { id: order.id } })).status, "Pending");
+        await call("post", `/api/admin/orders/${order.id}/payments`, { reference: randomUUID(), amountCents: order.totalCents }).expect(200);
+        await call("patch", `/api/admin/orders/${order.id}/fulfilment`, { fulfilmentStatus: "Processing" }).expect(200);
+        await call("patch", `/api/admin/orders/${order.id}/fulfilment`, { fulfilmentStatus: "Shipped" }).expect(400);
+        await call("patch", `/api/admin/orders/${order.id}/fulfilment`, { fulfilmentStatus: "Shipped", shippingReference: "SHIP-001" }).expect(200);
+        await call("post", `/api/admin/orders/${order.id}/cancel`, { reason: "Too late" }).expect(409);
+        await call("patch", `/api/admin/orders/${order.id}/shipping`, { shippingReference: "SHIP-002", reason: "Courier reference corrected" }).expect(200);
+        const delivered = await call("patch", `/api/admin/orders/${order.id}/fulfilment`, { fulfilmentStatus: "Delivered" }).expect(200);
+        assert.equal(delivered.body.shippingReference, "SHIP-002"); assert.equal(delivered.body.paymentStatus, "Confirmed");
+        await call("patch", `/api/admin/orders/${order.id}/fulfilment`, { fulfilmentStatus: "Processing" }).expect(409);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 4);
+    });
+
+    it("restores stock once for simultaneous and repeated cancellations, including archived products", async () => {
+        const order = await place(2);
+        await call("patch", `/api/admin/products/${product.id}/archive`, { archived: true, reason: "Discontinued" }).expect(200);
+        const results = await Promise.all(Array.from({ length: 4 }, () => call("post", `/api/admin/orders/${order.id}/cancel`, { reason: "Customer requested cancellation" }).expect(200)));
+        assert.equal(new Set(results.map(row => row.body.stockRestoredAt)).size, 1);
+        await call("post", `/api/admin/orders/${order.id}/cancel`, { reason: "Retry" }).expect(200);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
+        assert.equal(await prisma.stockAdjustment.count({ where: { orderId: order.id } }), 1);
+        assert.equal(await prisma.orderEvent.count({ where: { orderId: order.id, type: "Order cancelled" } }), 1);
+        assert.equal(results[0].body.paymentStatus, "Pending");
+        const legacy = await prisma.order.create({ data: { userId: customer.id, customerName: customer.name,
+            customerEmail: customer.email, totalCents: 0, status: "Cancelled", fulfilmentStatus: "Cancelled", stockRestoredAt: null } });
+        await call("post", `/api/admin/orders/${legacy.id}/cancel`, { reason: "Legacy retry" }).expect(200);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 5);
+        assert.equal(await prisma.stockAdjustment.count(), 1);
+    });
+
+    it("rolls back an entire cancellation if a later stock restoration is unsafe", async t => {
+        t.mock.method(console, "error", () => {});
+        const other = await prisma.product.create({ data: { name: "Second cancellation item", priceCents: 1, stock: 1 } });
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" }).send({ productId: product.id, quantity: 1 }).expect(200);
+        await request(app).post("/api/cart/items").auth(customerToken, { type: "bearer" }).send({ productId: other.id, quantity: 1 }).expect(200);
+        const order = (await request(app).post("/api/orders").auth(customerToken, { type: "bearer" }).set("Idempotency-Key", randomUUID()).send({}).expect(201)).body;
+        await prisma.product.update({ where: { id: other.id }, data: { stock: 2147483647 } });
+        await call("post", `/api/admin/orders/${order.id}/cancel`, { reason: "Unsafe restore" }).expect(409);
+        assert.equal((await prisma.product.findUnique({ where: { id: product.id } })).stock, 4);
+        assert.equal(await prisma.stockAdjustment.count(), 0); assert.equal(await prisma.adminAudit.count(), 0);
+        assert.equal((await prisma.order.findUnique({ where: { id: order.id } })).fulfilmentStatus, "Unfulfilled");
+    });
+
+    it("validates payment evidence and prevents duplicate confirmations or reuse of a payment reference", async t => {
+        t.mock.method(console, "error", () => {});
+        const first = await place(), second = await place(), reference = randomUUID();
+        await call("post", `/api/admin/orders/${first.id}/payments`, { reference, amountCents: 1 }).expect(400);
+        await call("post", `/api/admin/orders/${first.id}/payments`, { amountCents: first.totalCents }).expect(400);
+        await Promise.all(Array.from({ length: 3 }, () => call("post", `/api/admin/orders/${first.id}/payments`, { reference, amountCents: first.totalCents }).expect(200)));
+        assert.equal(await prisma.paymentRecord.count(), 1);
+        assert.equal(await prisma.orderEvent.count({ where: { type: "Payment confirmed" } }), 1);
+        await call("post", `/api/admin/orders/${second.id}/payments`, { reference, amountCents: second.totalCents }).expect(409);
+        assert.equal((await prisma.order.findUnique({ where: { id: second.id } })).paymentStatus, "Pending");
+        await call("post", `/api/admin/orders/${second.id}/cancel`, { reason: "Cancelled before paying" }).expect(200);
+        await call("post", `/api/admin/orders/${second.id}/payments`, { reference: randomUUID(), amountCents: second.totalCents }).expect(409);
+    });
+
+    it("counts verified active payments separately from pending, cancelled and refunded orders", async () => {
+        const confirmed = await place(2); await place();
+        const report = async () => (await call("get", "/api/admin/dashboard").expect(200)).body;
+        assert.equal((await report()).confirmedPaymentsCents, "0");
+        await call("post", `/api/admin/orders/${confirmed.id}/payments`, { reference: randomUUID(), amountCents: confirmed.totalCents }).expect(200);
+        assert.equal((await report()).confirmedPaymentsCents, "20000");
+        const cancelled = await call("post", `/api/admin/orders/${confirmed.id}/cancel`, { reason: "Customer changed their mind" }).expect(200);
+        assert.equal(cancelled.body.paymentStatus, "RefundRequired");
+        let data = await report(); assert.equal(data.confirmedPaymentsCents, "0"); assert.equal(data.awaitingRefundCents, "20000");
+        const reference = randomUUID();
+        await call("post", `/api/admin/orders/${confirmed.id}/refunds`, { reference, amountCents: confirmed.totalCents }).expect(200);
+        await call("post", `/api/admin/orders/${confirmed.id}/refunds`, { reference, amountCents: confirmed.totalCents }).expect(200);
+        data = await report(); assert.equal(data.confirmedPaymentsCents, "0"); assert.equal(data.awaitingRefundCents, "0"); assert.equal(data.refundedCents, "20000");
+        assert.equal(data.pendingOrders, 1); assert.equal(await prisma.paymentRecord.count({ where: { kind: "Refund" } }), 1);
+    });
 });

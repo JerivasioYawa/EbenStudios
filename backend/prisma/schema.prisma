@@ -8,48 +8,65 @@ datasource db {
 }
 
 model User {
-  id        Int           @id @default(autoincrement())
-  name      String
-  email     String        @unique
-  password  String
-  role      String        @default("CUSTOMER")
-  orders    Order[]
-  cart      Cart?
-  likes     ProductLike[]
-  createdAt DateTime      @default(now())
+  id               Int               @id @default(autoincrement())
+  name             String
+  email            String            @unique
+  password         String
+  role             String            @default("CUSTOMER")
+  orders           Order[]
+  cart             Cart?
+  likes            ProductLike[]
+  adminAudits      AdminAudit[]
+  stockAdjustments StockAdjustment[]
+  orderEvents      OrderEvent[]
+  paymentRecords   PaymentRecord[]
+  createdAt        DateTime          @default(now())
 }
 
 model Product {
-  id          Int           @id @default(autoincrement())
-  name        String        @unique
-  description String?
-  priceCents  Int
-  stock       Int           @default(0)
-  tag         String?
-  imageUrl    String?
-  orderItems  OrderItem[]
-  cartItems   CartItem[]
-  likes       ProductLike[]
-  createdAt   DateTime      @default(now())
+  id                Int               @id @default(autoincrement())
+  name              String            @unique
+  description       String?
+  priceCents        Int
+  stock             Int               @default(0)
+  tag               String?
+  imageUrl          String?
+  archivedAt        DateTime?
+  lowStockThreshold Int               @default(5)
+  stockAdjustments  StockAdjustment[]
+  orderItems        OrderItem[]
+  cartItems         CartItem[]
+  likes             ProductLike[]
+  createdAt         DateTime          @default(now())
+
+  @@index([archivedAt, createdAt])
 }
 
 model Order {
-  id              Int         @id @default(autoincrement())
-  user            User        @relation(fields: [userId], references: [id])
-  userId          Int
-  totalCents      Int
-  currency        String      @default("ZAR")
-  adjustmentCents Int         @default(0)
-  customerName    String
-  customerEmail   String
-  idempotencyKey  String      @default(uuid())
-  status          String      @default("Pending")
-  shippingAddress String?
-  items           OrderItem[]
-  createdAt       DateTime    @default(now())
+  id                Int               @id @default(autoincrement())
+  user              User              @relation(fields: [userId], references: [id])
+  userId            Int
+  totalCents        Int
+  currency          String            @default("ZAR")
+  adjustmentCents   Int               @default(0)
+  customerName      String
+  customerEmail     String
+  idempotencyKey    String            @default(uuid())
+  status            String            @default("Pending")
+  paymentStatus     String            @default("Pending")
+  fulfilmentStatus  String            @default("Unfulfilled")
+  stockRestoredAt   DateTime?
+  shippingReference String?
+  shippingAddress   String?
+  items             OrderItem[]
+  createdAt         DateTime          @default(now())
+  history           OrderEvent[]
+  payments          PaymentRecord[]
+  stockAdjustments  StockAdjustment[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
+  @@index([paymentStatus, fulfilmentStatus, createdAt])
 }
 
 model OrderItem {
@@ -99,4 +116,80 @@ model ProductLike {
 
   @@unique([userId, productId])
   @@index([productId])
+}
+
+model AdminAudit {
+  id         Int      @id @default(autoincrement())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    Int?
+  actorName  String
+  actorEmail String
+  action     String
+  entityType String
+  entityId   Int
+  reason     String?
+  beforeJson String?
+  afterJson  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model StockAdjustment {
+  id          Int      @id @default(autoincrement())
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId   Int?
+  productName String
+  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId     Int?
+  actorName   String
+  actorEmail  String
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId     Int?
+  kind        String   @default("Manual")
+  delta       Int
+  beforeStock Int
+  afterStock  Int
+  reason      String
+  createdAt   DateTime @default(now())
+
+  @@index([productId, createdAt])
+  @@index([orderId])
+}
+
+model OrderEvent {
+  id         Int      @id @default(autoincrement())
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    Int
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId    Int?
+  actorName  String
+  actorEmail String
+  type       String
+  fromStatus String?
+  toStatus   String?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+model PaymentRecord {
+  id          Int      @id @default(autoincrement())
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderId     Int
+  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId     Int?
+  actorName   String
+  actorEmail  String
+  kind        String
+  amountCents Int
+  currency    String   @default("ZAR")
+  reference   String   @unique
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@unique([orderId, kind])
+  @@index([createdAt])
 }

@@ -4,7 +4,7 @@ import { test as base, expect } from "@playwright/test";
 export { expect };
 export const apiURL = `http://127.0.0.1:${process.env.E2E_API_PORT || "4100"}/api`;
 export const productImage = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=", "base64",
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAE0lEQVQImWP4z8DwnwGM/zMwAAAf7gP9qS/A4gAAAABJRU5ErkJggg==", "base64",
 );
 
 export const test = base.extend({
